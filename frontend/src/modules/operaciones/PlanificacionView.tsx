@@ -54,7 +54,8 @@ export const PlanificacionView = () => {
             ]);
             setProductos(resP.data.data || resP.data || []);
             setUsers(resU.data.data || resU.data || []);
-        } catch (e) {
+        } catch (e: any) {
+            if (e.response && e.response.status === 401) return;
             console.warn('Error catalogs', e);
         }
     };
@@ -63,7 +64,8 @@ export const PlanificacionView = () => {
         try {
             const res = await planService.getProyectos();
             setProyectos(res.data.data || res.data);
-        } catch (err) {
+        } catch (err: any) {
+            if (err.response && err.response.status === 401) return;
             console.error(err);
         }
     };
