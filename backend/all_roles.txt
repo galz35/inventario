@@ -1,0 +1,4 @@
+4 | ADMIN
+1 | Administrador
+2 | Despacho
+3 | Tecnico

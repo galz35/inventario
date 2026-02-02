@@ -1,0 +1,140 @@
+:root {
+  --primary: #d32f2f;
+  /* Rojo */
+  --secondary: #2e7d32;
+  /* Verde */
+  --bg-dark: #121212;
+  --bg-card: #1e1e1e;
+  --text-primary: #ffffff;
+  --text-secondary: #b0b0b0;
+  --border: #333333;
+  --accent: #ffffff;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+button {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.btn-secondary {
+  background-color: var(--secondary);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.status-green {
+  color: var(--secondary);
+  font-weight: bold;
+}
+
+.status-red {
+  color: var(--primary);
+  font-weight: bold;
+}
+
+/* RESPONSIVE DESIGN */
+@media (max-width: 768px) {
+  nav {
+    display: none;
+    /* Sidebar hidden on mobile for now, or could be a drawer */
+  }
+
+  main {
+    padding: 20px !important;
+  }
+
+  .grid-stats {
+    grid-template-columns: 1fr !important;
+  }
+
+  h1 {
+    font-size: 1.5em;
+  }
+
+  .card {
+    padding: 15px;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+
+.badge-warning {
+  background: #ffa000;
+  color: black;
+}
+
+.badge-success {
+  background: var(--secondary);
+  color: white;
+}
+
+.badge-danger {
+  background: var(--primary);
+  color: white;
+}
+
+.badge-info {
+  background: #0288d1;
+  color: white;
+}
+
+.signature-pad {
+  border: 2px dashed var(--border);
+  background: #252525;
+  border-radius: 8px;
+  width: 100%;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+}

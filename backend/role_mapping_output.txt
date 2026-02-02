@@ -1,0 +1,4 @@
+Diana Martinez | ADMIN | diana.martinez@empresa.com
+Sofia Lopez | Despacho | sofia.lopez@empresa.com
+Roberto Central | Despacho | roberto.central@empresa.com
+Juan Rodriguez | Tecnico | juan.rodriguez@empresa.com

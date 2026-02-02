@@ -1,0 +1,6 @@
+export enum InvRole {
+  ADMIN = 'ADMIN',
+  TECNICO = 'TECNICO',
+  AUDITOR = 'AUDITOR',
+  SUPERVISOR = 'SUPERVISOR',
+}
