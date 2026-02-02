@@ -26,7 +26,13 @@ export const AuthView = ({ onLogin }: { onLogin: (user: any) => void }) => {
                 alertError('Error', 'No se recibió el token de acceso');
             }
         } catch (err: any) {
-            alertError('Error de acceso', err.response?.data?.message || 'Credenciales inválidas');
+            let msg = 'Credenciales inválidas';
+            if (err.response?.data?.message) {
+                msg = err.response.data.message;
+            } else if (err.message === 'Network Error') {
+                msg = 'No hay conexión con el servidor. Verifique internet o backend apagado.';
+            }
+            alertError('Error de acceso', msg);
         } finally {
             setLoading(false);
         }
