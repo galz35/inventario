@@ -187,17 +187,36 @@ export const WorkloadView = () => {
 
                     {tecnicos.map(t => (
                         <div key={t.idUsuario} style={{ display: 'contents' }}>
-                            <div style={{ background: 'var(--bg-surface)', padding: '15px', borderTop: '1px solid var(--border)', fontSize: '0.85rem', fontWeight: 600 }}>
+                            <div style={{ background: 'var(--bg-surface)', padding: '15px', borderTop: '1px solid var(--border)', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: t.currentWork.length > 0 ? '#f59e0b' : '#10b981' }}></div>
                                 {t.nombre}
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: 'var(--bg-surface)', borderTop: '1px solid var(--border)' }}>
                                 {[...Array(7)].map((_, i) => (
-                                    <div key={i} style={{ minHeight: '80px', borderLeft: '1px solid var(--border)', padding: '5px' }}>
+                                    <div
+                                        key={i}
+                                        style={{
+                                            minHeight: '80px',
+                                            borderLeft: '1px solid var(--border)',
+                                            padding: '8px',
+                                            cursor: 'pointer',
+                                            position: 'relative',
+                                            transition: 'background 0.2s'
+                                        }}
+                                        onClick={() => handleOpenAssign(t)}
+                                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.05)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                    >
+                                        {/* Show actual work if today (mocked to index 2 for now as in current code) */}
                                         {t.currentWork.length > 0 && i === 2 && (
-                                            <div style={{ padding: '4px', background: 'var(--primary)', borderRadius: '4px', fontSize: '0.7rem', color: '#fff' }}>
-                                                OT #{t.currentWork[0].idOT}
+                                            <div style={{ padding: '6px', background: 'var(--primary)', borderRadius: '6px', fontSize: '0.7rem', color: '#fff', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>
+                                                <div style={{ fontWeight: 800 }}>OT #{t.currentWork[0].idOT}</div>
+                                                <div style={{ opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.currentWork[0].clienteNombre}</div>
                                             </div>
                                         )}
+                                        <div style={{ position: 'absolute', bottom: '8px', right: '8px', opacity: 0.3 }}>
+                                            <Plus size={14} />
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -315,7 +334,18 @@ export const WorkloadView = () => {
                                     alignItems: 'center'
                                 }}>
                                     <div>
-                                        <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--primary)' }}>OT #{ot.idOT}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--primary)' }}>OT #{ot.idOT}</div>
+                                            <span style={{
+                                                fontSize: '0.65rem',
+                                                padding: '2px 8px',
+                                                borderRadius: '6px',
+                                                background: ot.prioridad === 'ALTA' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(148, 163, 184, 0.1)',
+                                                color: ot.prioridad === 'ALTA' ? '#f87171' : '#94a3b8',
+                                                border: `1px solid ${ot.prioridad === 'ALTA' ? '#f8717133' : '#94a3b833'}`,
+                                                fontWeight: 800
+                                            }}>{ot.prioridad}</span>
+                                        </div>
                                         <div style={{ fontSize: '0.9rem', color: '#e2e8f0', marginTop: '4px' }}>{ot.clienteNombre}</div>
                                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{ot.clienteDireccion}</div>
                                     </div>

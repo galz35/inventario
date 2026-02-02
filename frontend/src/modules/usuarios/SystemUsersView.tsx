@@ -3,7 +3,8 @@ import { authService, invService, opeService } from '../../services/api.service'
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { alertSuccess, alertError } from '../../services/alert.service';
-import { Plus, Shield, History, PenTool, Search, UserCircle } from 'lucide-react';
+import { Plus, Shield, History, PenTool, Search } from 'lucide-react';
+import { UserCircle } from 'lucide-react';
 
 export const SystemUsersView = () => {
     // State
@@ -196,6 +197,7 @@ export const SystemUsersView = () => {
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Gestión de accesos, roles y perfiles técnicos</p>
                 </div>
                 <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>
+                    {/* Fixed Icon Reference */}
                     <Plus size={18} style={{ marginRight: '8px' }} />
                     Nuevo Usuario
                 </button>
