@@ -1,0 +1,493 @@
+Eres Analista Funcional + Arquitecto de Software + DBA SQL Server + UX Lead + Líder Técnico.
+Tu trabajo es generar un DOCUMENTO ÚNICO en español, extremadamente detallado, llamado:
+
+“Documento de Implementación — Sistema de Inventario y Órdenes de Trabajo”
+
+Reglas:
+- Títulos simples (sin palabras decorativas).
+- Lenguaje claro y directo.
+- Diseño simple + eficiente + preciso + bonito (blanco/gris/negro + rojo + verde; NO usar azul).
+- Todo movimiento debe ser trazable y auditable.
+- Inventario exacto: prohibido editar stock directo.
+- Debes entregar: especificación funcional + modelo de datos SQL Server + SP/consultas base + reportes + pantallas + checklist 0–100.
+- Si hay algo incierto, ponlo en “Pendiente por confirmar” (no inventes).
+
+Contexto del negocio:
+- Empresa de servicios (telecom HFC) que atiende clientes por CASOS/ÓRDENES DE TRABAJO (OT) y también PROYECTOS.
+- No vende productos al público. Los materiales se consumen en OT/proyectos.
+- Maneja:
+  1) Inventario consumible multi-almacén (con almacén padre y sub-almacenes).
+  2) Inventario consignado de proveedores (propiedad proveedor).
+  3) Transferencias entre almacenes (con confirmación).
+  4) Stock en camioneta del técnico (almacén tipo TÉCNICO).
+  5) Conteo físico vs sistema (con aprobación y aplicación).
+  6) Ajustes (solo por conteo o motivo documentado).
+  7) Merma/daño/pérdida.
+  8) Activo fijo serializado: equipos y herramientas (asignación, devolución, reparación, baja).
+  9) Equipos serializados instalados en cliente (activo instalado, retiro, reemplazo).
+  10) Seguimiento de OT (estado, checklist, evidencia, firma, tiempos).
+  11) Seguimiento de proyecto (estado, etapas/tareas, avance, consumo, costos).
+
+Stack técnico:
+- Backend: NestJS REST (o API equivalente)
+- DB: SQL Server (principal)
+- Frontend: React/Next responsive (móvil y web en un solo sistema)
+- Auth: JWT + Refresh + RBAC (roles/permisos)
+
+========================================================
+SECCIÓN 0 — RESUMEN (1 página)
+========================================================
+Incluye:
+- Objetivo del sistema
+- Usuarios y roles
+- Módulos
+- Beneficios operativos
+- Fuera de alcance (por defecto: facturación, caja, POS, compras completas)
+
+========================================================
+SECCIÓN 1 — GLOSARIO (OBLIGATORIO)
+========================================================
+Define términos con ejemplos:
+- Almacén padre / sub-almacén
+- Kardex
+- Movimiento
+- Consignación
+- OT (Orden de trabajo) / Caso
+- Proyecto
+- Consumo
+- Activo fijo (serializado)
+- Equipo instalado (serializado)
+- Conteo físico
+- Ajuste / Merma / Pérdida
+- Confirmación de transferencia
+
+========================================================
+SECCIÓN 2 — ROLES, PERMISOS Y LOGIN (OBLIGATORIO)
+========================================================
+2.1 Roles mínimos:
+- Administrador
+- Bodega
+- Supervisor
+- Técnico
+- Gerencia
+- (Opcional) Backoffice/Despacho (quien asigna OT)
+
+2.2 Matriz permisos por módulo/acción:
+Acciones: VER, CREAR, EDITAR, ELIMINAR, APROBAR, EXPORTAR
+Módulos: Usuarios/Roles, Catálogos, Almacenes, Inventario, Kardex, Transferencias, Consignación, OT, Proyectos, Activos, Conteo, Reportes, Parámetros.
+
+2.3 Reglas de acceso:
+- Técnico solo ve: sus OT, su camioneta (almacén), activos asignados y consumo propio.
+- Gerencia solo lectura reportes.
+- Ajustes/aplicar conteo requiere APROBAR.
+- Baja de activo requiere APROBAR.
+
+2.4 Seguridad:
+- bcrypt
+- JWT (15-30 min)
+- Refresh token (7-30 días) guardado hasheado
+- logout revoca refresh
+- usuario activo/inactivo
+- auditoría (created_at/by updated_at/by)
+- bitácora de acciones (tabla de auditoría de eventos)
+
+Checklist + DoD.
+
+========================================================
+SECCIÓN 3 — MÓDULOS Y CÓMO FUNCIONA CADA UNO
+========================================================
+
+3.1 Catálogos
+- Productos consumibles (por cantidad)
+- Productos serializados (se manejan como activos/equipos; no por cantidad)
+- Categorías
+- Proveedores
+- Motivos de movimiento
+- Clientes (mínimo: nombre, teléfono, dirección)
+- Tipos de OT (instalación, mantenimiento, reparación) con reglas de evidencia/firma
+
+Reglas:
+- Si producto es serializado => no aparece para “consumo por cantidad”, solo como activo/equipo.
+
+3.2 Almacenes (multi-almacén con padre)
+- Tabla almacenes con jerarquía: idPadre
+Tipos:
+- CENTRAL, REGIONAL, PROYECTO, TECNICO
+Reglas:
+- Un almacén TECNICO pertenece a un usuario técnico.
+- Un almacén PROYECTO pertenece a un proyecto.
+
+3.3 Inventario consumible (exacto)
+Regla máxima:
+- PROHIBIDO editar stock directo.
+- Todo cambio es un movimiento kardex, con transacción.
+
+Tipos de movimiento consumible:
+- ENTRADA_COMPRA (solo registrar)
+- ENTRADA_CONSIGNACION
+- TRANSFERENCIA_SALIDA / TRANSFERENCIA_ENTRADA (generadas al confirmar)
+- CONSUMO_OT
+- DEVOLUCION_OT (de técnico a almacén)
+- DEVOLUCION_PROVEEDOR (consignación)
+- MERMA_DAÑO
+- AJUSTE_CONTEO
+- AJUSTE_MANUAL (solo Admin/Sup con motivo y aprobación)
+
+3.4 Transferencias entre almacenes (con confirmación)
+Flujo:
+1) Crear transferencia (PENDIENTE) con detalle productos/cantidades/propietario (EMPRESA/PROVEEDOR)
+2) En tránsito (opcional)
+3) Confirmar recepción (CONFIRMADA) => genera 2 movimientos en kardex en una transacción:
+   - salida origen
+   - entrada destino
+4) Cancelar (CANCELADA) sin afectar stock
+
+Reglas:
+- Si no se confirma, stock no cambia.
+- Confirmación solo por rol autorizado.
+
+3.5 Consignación (propiedad proveedor)
+Regla:
+- Stock consignado se separa por propietario=PROVEEDOR + proveedorId.
+Flujos:
+- Entrada consignación
+- Consumo consignado en OT
+- Devolución a proveedor
+- Liquidación por período (consumo - devoluciones)
+
+3.6 OT (Órdenes de trabajo / Casos)
+Campos:
+- cliente
+- dirección
+- tipo OT
+- prioridad
+- estado
+- técnico asignado
+- fechas (asignación, inicio, cierre)
+- checklist (simple)
+- evidencias (fotos)
+- firma (opcional según tipo)
+- consumos (materiales)
+- activos instalados/retirados/reemplazados
+
+Estados OT sugeridos:
+- REGISTRADA
+- ASIGNADA
+- EN_PROCESO
+- EN_ESPERA (falta material / cita)
+- FINALIZADA
+- CANCELADA
+
+Flujo:
+Backoffice crea OT -> asigna técnico -> técnico inicia -> consume materiales/instala equipos -> evidencia/firma -> solicita cierre -> supervisor cierra (o cierre automático si reglas cumplidas).
+
+Reglas:
+- No cerrar si falta lo obligatorio según tipo OT:
+  - instalación: firma + evidencia + equipo instalado (si aplica)
+  - mantenimiento: evidencia opcional, checklist mínimo
+  - reparación: evidencia de problema y solución
+
+3.7 Proyecto
+Proyecto agrupa OTs y consumo.
+Campos:
+- nombre simple
+- descripción
+- estado (PLANIFICADO/EN_EJECUCION/PAUSADO/FINALIZADO/CANCELADO)
+- fechas
+- responsable
+- almacén proyecto (opcional)
+- etapas/tareas (opcional pero recomendado)
+
+Etapas/Tareas:
+- etapa: nombre, orden, %peso
+- tarea/subtarea: nombre, estado, responsable
+
+Avance proyecto:
+- % por OTs finalizadas o por tareas completadas (define 1 método y úsalo).
+
+3.8 Activo fijo y equipos serializados
+Tipos:
+- HERRAMIENTA (taladro, medidor)
+- EQUIPO (modem, ONT, router)
+
+Estados:
+- DISPONIBLE
+- ASIGNADO_A_TECNICO
+- INSTALADO_EN_CLIENTE
+- EN_REPARACION
+- DANIADO
+- PERDIDO
+- BAJA
+
+Flujos:
+- Asignar activo a técnico
+- Devolver activo a almacén
+- Instalar equipo en cliente desde OT
+- Retirar equipo de cliente
+- Reemplazo:
+  - registrar equipo saliente (retirado + dañado o a reparación)
+  - registrar equipo entrante (instalado)
+  - bloquear cierre si no existe el par
+
+Reparación:
+- enviar a reparación, recibir, resultado reparable/no reparable
+
+3.9 Conteo físico vs sistema
+Flujo:
+- Iniciar conteo (ABIERTA) => snapshot sistema
+- Captura físico
+- Cerrar (CERRADA)
+- Aprobar (APROBADA)
+- Aplicar (APLICADA) => genera AJUSTE_CONTEO en kardex y actualiza stock
+
+Reglas:
+- Motivo obligatorio para diferencias.
+- Diferencias grandes requieren comentario.
+
+3.10 Reportes (operativos y gerenciales)
+Definir reportes con filtros y columnas claras (sin adornos).
+Operativos:
+- Stock por almacén
+- Stock bajo
+- Kardex por producto/almacén
+- Transferencias pendientes y confirmadas
+- Consumo por OT
+- Consumo por técnico
+- Devoluciones y merma
+- Conteos y diferencias
+- Activos por estado (dañado, reparación, perdido)
+Gerenciales:
+- Consumo por proyecto y costo
+- Avance proyectos
+- OTs por estado y tiempos (SLA)
+- Liquidación consignación por proveedor
+
+========================================================
+SECCIÓN 4 — UI/UX (SIMPLE + EFICIENTE + BONITO)
+========================================================
+Diseño:
+- Blanco/gris/negro + rojo (acción) + verde (ok)
+- Tablas tipo Excel: filtro, búsqueda, paginación server
+- Acciones principales visibles y claras
+- En móvil: flujo de 3 pasos (escanear->cantidad->guardar)
+
+Pantallas web (mínimas) con lo que contienen:
+- Login
+- Inicio (KPIs + acciones rápidas)
+- OT (lista, detalle)
+- Proyectos (lista, detalle)
+- Inventario (stock/kardex/entradas/salidas)
+- Transferencias (crear/confirmar)
+- Consignación (stock/liquidaciones)
+- Activos (lista/detalle/historial)
+- Conteo (sesiones/captura/resumen)
+- Reportes (filtros + tabla + export)
+- Administración (usuarios/roles/permisos/catálogos)
+
+Pantallas móvil:
+- Mis OT
+- Detalle OT (checklist, consumo, activos, evidencia, firma, cerrar)
+- Mi almacén (camioneta)
+- Captura conteo (si rol aplica)
+
+========================================================
+SECCIÓN 5 — MODELO DE DATOS SQL SERVER (TABLAS + CAMPOS + KEYS)
+========================================================
+Debes entregar:
+- Diagrama lógico (texto)
+- Tablas con campos y tipos SQL Server
+- PK/FK
+- índices
+- constraints
+- auditoría
+
+Tablas obligatorias (MANDATORIO: Prefijo Inv_):
+SEGURIDAD
+- Inv_seg_usuarios
+- Inv_seg_roles
+- Inv_seg_permisos (modulo, accion)
+- Inv_seg_usuario_roles
+- Inv_seg_rol_permisos
+- Inv_seg_refresh_tokens
+- Inv_seg_auditoria_eventos
+
+CATÁLOGOS
+- Inv_cat_proveedores
+- Inv_cat_almacenes (idPadre, tipo, responsableUsuarioId, proyectoId opcional, tecnicoUsuarioId opcional)
+- Inv_cat_categorias_producto
+- Inv_cat_productos (codigo, nombre, unidad, esSerializado bit, costo decimal(18,2), activo bit)
+- Inv_cat_producto_codigos (barcode/qr)
+- Inv_cat_clientes
+- Inv_cat_tipos_ot (reglas: requiereFirma bit, requiereEvidencia bit, requiereEquipoSerializado bit)
+- Inv_cat_motivos_movimiento (MERMA, AJUSTE, DAÑO, DEVOLUCION, etc.)
+
+PROYECTOS Y OT
+- Inv_ope_proyectos
+- Inv_ope_proyecto_tecnicos
+- Inv_ope_proyecto_etapas
+- Inv_ope_proyecto_tareas
+- Inv_ope_ot
+- Inv_ope_ot_checklist
+- Inv_ope_ot_evidencias
+- Inv_ope_ot_firmas
+- Inv_ope_ot_eventos (timeline)
+- Inv_ope_ot_consumo (detalle de consumos)
+- Inv_ope_ot_activos (instalado/retirado/reemplazo)
+
+INVENTARIO CONSUMIBLE
+- Inv_inv_stock (almacenId, productoId, propietarioTipo, proveedorId null, cantidad)
+- Inv_inv_movimientos (header)
+- Inv_inv_movimiento_detalle (detail)
+
+TRANSFERENCIAS
+- Inv_inv_transferencias
+- Inv_inv_transferencia_detalle
+
+CONSIGNACIÓN
+- Inv_inv_liquidacion_consignacion
+- Inv_inv_liquidacion_consignacion_det
+
+ACTIVOS SERIALIZADOS
+- Inv_act_activos (serial unique, tipo, estado, almacenActualId, tecnicoActualId, clienteActualId null)
+- Inv_act_movimientos (historial)
+- Inv_act_reparaciones
+
+CONTEO
+- Inv_inv_conteos
+- Inv_inv_conteo_detalle
+
+Índices obligatorios:
+- Inv_inv_stock(almacenId, productoId, propietarioTipo, proveedorId)
+- Inv_inv_movimientos(fecha, tipoMovimiento, almacenOrigenId, almacenDestinoId)
+- Inv_ope_ot(tecnicoId, estado, fechaAsignacion)
+- Inv_act_activos(serial) UNIQUE
+- Inv_inv_conteos(almacenId, estado, fechaInicio)
+
+========================================================
+SECCIÓN 6 — STORED PROCEDURES / CONSULTAS BASE (Prefijo Inv_sp_)
+========================================================
+Debes escribir SP base (SQL Server) con prefijo Inv_sp_ para operaciones críticas:
+
+Inventario:
+- Inv_sp_inv_stock_obtener (paginado + filtros)
+- Inv_sp_inv_kardex_obtener (por producto/almacen/fechas)
+- Inv_sp_inv_movimiento_registrar (entrada/salida/merma/devolución) => transaccional
+- Inv_sp_inv_transferencia_crear
+- Inv_sp_inv_transferencia_confirmar => transaccional (2 movimientos + actualizar stock)
+- Inv_sp_inv_conteo_iniciar (snapshot)
+- Inv_sp_inv_conteo_capturar
+- Inv_sp_inv_conteo_aprobar
+- Inv_sp_inv_conteo_aplicar => transaccional (ajustes + stock)
+
+OT/Proyecto:
+- Inv_sp_ot_crear
+- Inv_sp_ot_asignar_tecnico
+- Inv_sp_ot_iniciar
+- Inv_sp_ot_consumir_material => llama sp de movimiento
+- Inv_sp_ot_activo_reemplazar => transaccional (activos + ot_activos)
+- Inv_sp_ot_cerrar (validaciones por tipo OT)
+- Inv_sp_proyecto_resumen (avance + costos)
+
+Activos:
+- Inv_sp_activo_asignar_tecnico
+- Inv_sp_activo_devolver
+- Inv_sp_activo_enviar_reparacion
+- Inv_sp_activo_recibir_reparacion
+- Inv_sp_activo_dar_baja (requiere aprobación)
+
+Reportes:
+- Inv_sp_rep_stock_bajo
+- Inv_sp_rep_consumo_por_ot
+- Inv_sp_rep_consumo_por_tecnico
+- Inv_sp_rep_consumo_por_proyecto
+- Inv_sp_rep_consignacion_liquidacion
+- Inv_sp_rep_activos_estado
+- Inv_sp_rep_ot_sla_tiempos
+
+Debes incluir:
+- parámetros
+- validaciones
+- transacciones
+- control de concurrencia (UPDLOCK/HOLDLOCK donde aplique)
+- manejo de errores TRY/CATCH
+
+========================================================
+SECCIÓN 7 — REPORTES (DETALLE)
+========================================================
+Para cada reporte define:
+- filtros
+- columnas
+- tabla fuente
+- SP sugerido
+- índices necesarios
+
+========================================================
+SECCIÓN 8 — PLAN 0–100 (CHECKLIST)
+========================================================
+Crea roadmap por fases con tareas numeradas:
+Fase 1: Auth + roles + catálogos
+Fase 2: Almacenes + inventario stock + kardex
+Fase 3: OT + consumo + móvil
+Fase 4: Transferencias
+Fase 5: Conteo físico
+Fase 6: Consignación
+Fase 7: Activos + reemplazos + reparaciones
+Fase 8: Reportes
+Fase 9: Hardening (logs, backup, performance)
+Fase 10: UAT + salida
+
+Cada tarea:
+- [ ] checkbox
+- Prioridad Alta/Media/Baja
+- Dependencias
+- DoD
+
+========================================================
+SECCIÓN 9 — PENDIENTES POR CONFIRMAR
+========================================================
+Lista corta:
+- ¿Firma siempre o depende de tipo OT?
+- ¿Evidencia requerida siempre o por tipo OT?
+- ¿Se requiere lote/vencimiento? (por defecto no)
+- ¿Se requiere impresión? (por defecto no)
+- ¿SLA por tipo OT? (tiempo máximo)
+- ¿Activos consignados también?
+
+========================================================
+SECCIÓN 10 — ESTILO DE DESARROLLO (BACKEND)
+========================================================
+El desarrollo del backend seguirá los estándares de éxito de proyectos anteriores del usuario, priorizando rendimiento, seguridad y mantenibilidad.
+
+10.1 Arquitectura y Tecnologías
+- Framework: NestJS (REST API).
+- Base de Datos: SQL Server.
+- Acceso a Datos: Repository Pattern. Se prohíbe el uso de ORMs pesados como TypeORM para lógica compleja. Se utilizará el driver nativo 'mssql' a través de un BaseRepo optimizado.
+- SP-First: Toda la lógica de negocio crítica, validaciones de stock y consultas complejas DEBEN residir en Stored Procedures.
+- Transaccionalidad: Uso obligatorio de transacciones (conTransaccion) para asegurar la integridad referencial y de inventario.
+- Auditoría: Registro automático de consultas lentas (>1000ms) en Inv_p_SlowQueries.
+
+10.2 Reglas de Nomenclatura (CRÍTICO)
+- Prefijo Único: TODA tabla, vista, función o procedimiento almacenado de este proyecto DEBE iniciar con el prefijo "Inv_".
+- Ejemplo: Inv_seg_usuarios, Inv_cat_productos, Inv_sp_ot_crear.
+- Propósito: Aislamiento total en la base de datos "Bdplaner" para no interferir con otros proyectos existentes.
+- Formato: snake_case para nombres de tablas y campos.
+
+10.3 Manejo de Errores y Seguridad
+- TRY/CATCH en todos los SPs con retorno de códigos de error estandarizados.
+- Validación de permisos (RBAC) en la capa de Service antes de llamar al Repository.
+- Sanitización de parámetros integrada en el BaseRepo.
+
+========================================================
+ENTREGABLE FINAL
+========================================================
+Genera el documento completo en español, con:
+- estructura clara
+- tablas SQL Server (campos y tipos) con prefijo Inv_
+- SP base (al menos los críticos) con prefijo Inv_
+- UI detallada por página
+- flujos completos
+- reportes
+- checklist 0–100
+
+No omitas consignación, conteo físico, activos serializados y reemplazo en OT.
+No uses azul en diseño.
