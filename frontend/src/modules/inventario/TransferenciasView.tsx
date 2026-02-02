@@ -40,7 +40,7 @@ export const TransferenciasView = () => {
             const res = await invService.getAlmacenes();
             setAlmacenes(res.data.data || res.data || []);
         } catch (e) {
-            console.warn("No se pudieron cargar almacenes");
+            // fail silent
         }
     };
 
@@ -58,7 +58,8 @@ export const TransferenciasView = () => {
                 );
             }
             setTransferencias(data);
-        } catch (e) {
+        } catch (e: any) {
+            if (e.response && e.response.status === 401) return;
             console.error(e);
         } finally {
             setLoadingList(false);
