@@ -12,6 +12,7 @@ import { ActivosView } from './modules/activos/ActivosView';
 import { TransferenciasView } from './modules/inventario/TransferenciasView';
 
 import { UsuariosView } from './modules/usuarios/UsuariosView';
+import { AdminUsuariosView } from './modules/usuarios/AdminUsuariosView';
 
 
 import { DashboardView } from './modules/dashboard/DashboardView';
@@ -163,6 +164,7 @@ export default function App() {
             <>
               <SidebarSection label="Sistema" show={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'usuarios'} icon={UserCog} label="Gestión Usuarios" onClick={() => setView('usuarios')} showLabel={isSidebarOpen || !isMobile} />
+              <SidebarLink active={view === 'admin-usuarios'} icon={UserCog} label="Admin Usuarios" onClick={() => setView('admin-usuarios')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'activos'} icon={Settings} label="Activos y Herramientas" onClick={() => setView('activos')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'almacenes'} icon={Building2} label="Almacenes" onClick={() => setView('almacenes')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'catalogos'} icon={FolderOpen} label="Catálogos" onClick={() => setView('catalogos')} showLabel={isSidebarOpen || !isMobile} />
@@ -234,6 +236,7 @@ export default function App() {
           {view === 'reportes' && <ReportesView />}
           {view === 'activos' && <ActivosView />}
           {view === 'usuarios' && <UsuariosView />}
+          {view === 'admin-usuarios' && <AdminUsuariosView />}
         </div>
       </main>
     </div>
