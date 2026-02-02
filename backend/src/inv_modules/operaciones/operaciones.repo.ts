@@ -69,6 +69,8 @@ export async function crearOT(dto: {
   prioridad: string;
   direccion: string;
   idUsuarioCrea: number;
+  idTecnicoAsignado?: number;
+  estado?: string;
   notas?: string;
   numeroCliente?: string;
   contactoNombre?: string;
@@ -77,7 +79,6 @@ export async function crearOT(dto: {
   descripcionTrabajo?: string;
   clienteNombre?: string;
 }) {
-  // Assuming Inv_sp_ot_crear exists as defined in schema
   const res = await ejecutarSP<{ idOT: number }>('Inv_sp_ot_crear', {
     idProyecto: { valor: dto.idProyecto || null, tipo: Int },
     idCliente: { valor: dto.idCliente || null, tipo: Int },
@@ -90,12 +91,28 @@ export async function crearOT(dto: {
     contactoNombre: { valor: dto.contactoNombre || null, tipo: NVarChar },
     telefono: { valor: dto.telefono || null, tipo: NVarChar },
     correo: { valor: dto.correo || null, tipo: NVarChar },
-    descripcionTrabajo: {
-      valor: dto.descripcionTrabajo || null,
-      tipo: NVarChar,
-    },
+    descripcionTrabajo: { valor: dto.descripcionTrabajo || null, tipo: NVarChar },
     clienteNombre: { valor: dto.clienteNombre || null, tipo: NVarChar },
   });
+
+  const idOT = res[0]?.idOT;
+
+  if (idOT && (dto.idTecnicoAsignado || dto.estado)) {
+    const request = await crearRequest();
+    request.input('idOT', Int, idOT);
+    let updateQuery = `UPDATE Inv_ope_ot SET idOT = idOT`;
+    if (dto.idTecnicoAsignado) {
+      request.input('idTec', Int, dto.idTecnicoAsignado);
+      updateQuery += `, idTecnicoAsignado = @idTec, fechaAsignacion = GETDATE(), estado = 'EN_PROGRESO'`;
+    }
+    if (dto.estado && !dto.idTecnicoAsignado) {
+      request.input('est', NVarChar, dto.estado);
+      updateQuery += `, estado = @est`;
+    }
+    updateQuery += ` WHERE idOT = @idOT`;
+    await request.query(updateQuery);
+  }
+
   return res[0];
 }
 
@@ -216,4 +233,18 @@ export async function registrarConsumoOT(
 
     return { idMovimiento: idMov };
   });
+}
+
+export async function asignarOT(idOT: number, idTecnico: number) {
+  const request = await crearRequest();
+  request.input('idOT', Int, idOT);
+  request.input('idTecnico', Int, idTecnico);
+  const query = `
+        UPDATE Inv_ope_ot 
+        SET idTecnicoAsignado = @idTecnico,
+            fechaAsignacion = GETDATE(),
+            estado = CASE WHEN estado = 'PENDIENTE' THEN 'EN_PROGRESO' ELSE estado END
+        WHERE idOT = @idOT
+    `;
+  await request.query(query);
 }

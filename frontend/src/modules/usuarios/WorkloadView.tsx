@@ -1,14 +1,31 @@
 import { useState, useEffect } from 'react';
 import { authService, opeService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
-
-import { LayoutList, Calendar as CalendarIcon, User, Clock, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Modal } from '../../components/Modal';
+import { alertSuccess, alertError } from '../../services/alert.service';
+import { LayoutList, Calendar as CalendarIcon, User, Clock, CheckCircle2, ChevronLeft, ChevronRight, UserPlus, FileText, Plus } from 'lucide-react';
 
 export const WorkloadView = () => {
     const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
     const [tecnicos, setTecnicos] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedDate, setSelectedDate] = useState(new Date());
+
+    // Assignment Modal State
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [selectedTecnico, setSelectedTecnico] = useState<any>(null);
+    const [unassignedOts, setUnassignedOts] = useState<any[]>([]);
+    const [assignTab, setAssignTab] = useState<'existing' | 'new'>('existing');
+
+    // Quick Create OT Form
+    const [newOt, setNewOt] = useState({
+        clienteNombre: '',
+        clienteDireccion: '',
+        tipoOT: 'INSTALACION',
+        prioridad: 'MEDIA',
+        descripcionTrabajo: '',
+        idTipoOT: 1 // Default to 1
+    });
 
     useEffect(() => {
         loadData();
@@ -17,33 +34,66 @@ export const WorkloadView = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch Users
             const usersRes = await authService.getUsers();
             let rawUsers = usersRes.data?.data || usersRes.data || [];
             if (rawUsers.data) rawUsers = rawUsers.data;
 
-            // Filter only technicians
             const onlyTecnicos = Array.isArray(rawUsers)
                 ? rawUsers.filter((u: any) => (u.rolNombre || '').toUpperCase().includes('TECNICO'))
                 : [];
 
-            // 2. Fetch all active OTs to map workload
-            const otsRes = await opeService.listarOTs({ estado: 'EN_PROGRESO' });
+            const otsRes = await opeService.listarOTs();
             let rawOts = otsRes.data?.data || otsRes.data || [];
             if (rawOts.data) rawOts = rawOts.data;
-            const activeOts = Array.isArray(rawOts) ? rawOts : [];
+            const allOts = Array.isArray(rawOts) ? rawOts : [];
 
-            // Map workload to technicians
             const mapped = onlyTecnicos.map(t => ({
                 ...t,
-                currentWork: activeOts.filter(ot => ot.idTecnicoAsignado === t.idUsuario)
+                currentWork: allOts.filter(ot => ot.idTecnicoAsignado === t.idUsuario && ot.estado === 'EN_PROGRESO')
             }));
 
             setTecnicos(mapped);
+            setUnassignedOts(allOts.filter(ot => !ot.idTecnicoAsignado || ot.estado === 'PENDIENTE'));
         } catch (err) {
             console.error('Error loading workload:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleOpenAssign = (tecnico: any) => {
+        setSelectedTecnico(tecnico);
+        setIsAssignModalOpen(true);
+        setAssignTab('existing');
+    };
+
+    const handleAssignExisting = async (idOT: number) => {
+        if (!selectedTecnico) return;
+        try {
+            await opeService.asignarOT(idOT, selectedTecnico.idUsuario);
+            alertSuccess(`OT #${idOT} asignada a ${selectedTecnico.nombre}`);
+            setIsAssignModalOpen(false);
+            loadData();
+        } catch (err) {
+            alertError('Error al asignar OT');
+        }
+    };
+
+    const handleQuickCreate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedTecnico) return;
+        try {
+            await opeService.crearOT({
+                ...newOt,
+                idTecnicoAsignado: selectedTecnico.idUsuario,
+                estado: 'EN_PROGRESO'
+            });
+            alertSuccess('OT creada y asignada correctamente');
+            setIsAssignModalOpen(false);
+            setNewOt({ clienteNombre: '', clienteDireccion: '', tipoOT: 'INSTALACION', prioridad: 'MEDIA', descripcionTrabajo: '', idTipoOT: 1 });
+            loadData();
+        } catch (err) {
+            alertError('Error al crear OT');
         }
     };
 
@@ -103,21 +153,19 @@ export const WorkloadView = () => {
         {
             key: 'acciones',
             label: 'Operación',
-            render: () => (
+            render: (_: any, row: any) => (
                 <button
                     className="btn-primary"
-                    style={{ padding: '6px 12px', fontSize: '0.75rem', background: 'var(--accent)' }}
-                    onClick={() => alert('Próximamente: Panel de asignación rápida')}
+                    style={{ padding: '6px 12px', fontSize: '0.75rem', background: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '5px' }}
+                    onClick={() => handleOpenAssign(row)}
                 >
-                    Asignar Caso
+                    <UserPlus size={14} /> Asignar Caso
                 </button>
             )
         }
     ];
 
-    // Calendar Helper Components
     const CalendarView = () => {
-        // Simple 7-day view for workload visualization
         const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
         const currentMonth = selectedDate.toLocaleString('default', { month: 'long' });
 
@@ -132,13 +180,11 @@ export const WorkloadView = () => {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '1px', background: 'var(--border)' }}>
-                    {/* Header */}
                     <div style={{ background: '#0a0a0a', padding: '10px' }}>Técnico</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#0a0a0a' }}>
                         {days.map(d => <div key={d} style={{ padding: '10px', textAlign: 'center', fontSize: '0.8rem', borderLeft: '1px solid var(--border)' }}>{d}</div>)}
                     </div>
 
-                    {/* Rows */}
                     {tecnicos.map(t => (
                         <div key={t.idUsuario} style={{ display: 'contents' }}>
                             <div style={{ background: 'var(--bg-surface)', padding: '15px', borderTop: '1px solid var(--border)', fontSize: '0.85rem', fontWeight: 600 }}>
@@ -147,7 +193,6 @@ export const WorkloadView = () => {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: 'var(--bg-surface)', borderTop: '1px solid var(--border)' }}>
                                 {[...Array(7)].map((_, i) => (
                                     <div key={i} style={{ minHeight: '80px', borderLeft: '1px solid var(--border)', padding: '5px' }}>
-                                        {/* Mock assignments for visual demo */}
                                         {t.currentWork.length > 0 && i === 2 && (
                                             <div style={{ padding: '4px', background: 'var(--primary)', borderRadius: '4px', fontSize: '0.7rem', color: '#fff' }}>
                                                 OT #{t.currentWork[0].idOT}
@@ -226,6 +271,103 @@ export const WorkloadView = () => {
             ) : (
                 <CalendarView />
             )}
+
+            {/* ASSIGNMENT MODAL OVERHAUL */}
+            <Modal
+                isOpen={isAssignModalOpen}
+                onClose={() => setIsAssignModalOpen(false)}
+                title={`Asignar Trabajo a: ${selectedTecnico?.nombre}`}
+                width="700px"
+            >
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '15px' }}>
+                    <button
+                        className={`btn-${assignTab === 'existing' ? 'primary' : 'secondary'}`}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                        onClick={() => setAssignTab('existing')}
+                    >
+                        <FileText size={18} /> Casos Pendientes ({unassignedOts.length})
+                    </button>
+                    <button
+                        className={`btn-${assignTab === 'new' ? 'primary' : 'secondary'}`}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                        onClick={() => setAssignTab('new')}
+                    >
+                        <Plus size={18} /> Crear Nuevo Caso
+                    </button>
+                </div>
+
+                {assignTab === 'existing' && (
+                    <div className="custom-scroll" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                        {unassignedOts.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>
+                                No hay casos pendientes sin asignar.
+                            </div>
+                        ) : (
+                            unassignedOts.map(ot => (
+                                <div key={ot.idOT} style={{
+                                    padding: '15px',
+                                    background: 'rgba(255,255,255,0.03)',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--border)',
+                                    marginBottom: '10px',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <div>
+                                        <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--primary)' }}>OT #{ot.idOT}</div>
+                                        <div style={{ fontSize: '0.9rem', color: '#e2e8f0', marginTop: '4px' }}>{ot.clienteNombre}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{ot.clienteDireccion}</div>
+                                    </div>
+                                    <button className="btn-primary" style={{ padding: '8px 15px' }} onClick={() => handleAssignExisting(ot.idOT)}>
+                                        Asignar
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
+
+                {assignTab === 'new' && (
+                    <form onSubmit={handleQuickCreate} style={{ display: 'grid', gap: '15px' }}>
+                        <div className="form-group">
+                            <label className="form-label">Nombre del Cliente</label>
+                            <input className="form-input" required value={newOt.clienteNombre} onChange={e => setNewOt({ ...newOt, clienteNombre: e.target.value })} placeholder="Ej: Juan Perez / Empresa X" />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Dirección</label>
+                            <input className="form-input" required value={newOt.clienteDireccion} onChange={e => setNewOt({ ...newOt, clienteDireccion: e.target.value })} placeholder="Ubicación del servicio" />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                            <div className="form-group">
+                                <label className="form-label">Tipo de Trabajo</label>
+                                <select className="form-input" value={newOt.tipoOT} onChange={e => setNewOt({ ...newOt, tipoOT: e.target.value })}>
+                                    <option value="INSTALACION">Instalación</option>
+                                    <option value="MANTENIMIENTO">Mantenimiento</option>
+                                    <option value="REPARACION">Reparación</option>
+                                    <option value="OTROS">Otros</option>
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Prioridad</label>
+                                <select className="form-input" value={newOt.prioridad} onChange={e => setNewOt({ ...newOt, prioridad: e.target.value })}>
+                                    <option value="ALTA">Alta (Urgente)</option>
+                                    <option value="MEDIA">Media</option>
+                                    <option value="BAJA">Baja</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Descripción del Trabajo</label>
+                            <textarea className="form-input" style={{ minHeight: '80px' }} value={newOt.descripcionTrabajo} onChange={e => setNewOt({ ...newOt, descripcionTrabajo: e.target.value })} placeholder="Detalles de la labor a realizar..." />
+                        </div>
+                        <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <button type="button" className="btn-secondary" onClick={() => setIsAssignModalOpen(false)}>Cancelar</button>
+                            <button type="submit" className="btn-primary">Crear y Asignar OT</button>
+                        </div>
+                    </form>
+                )}
+            </Modal>
         </div>
     );
 };

@@ -85,4 +85,14 @@ export class OperacionesController {
       url: `/uploads/ot_evidencias/${fileName}`,
     };
   }
+
+  @Post('ot/:id/asignar')
+  @Roles('ADMIN', 'SUPERVISOR', 'DESPACHO')
+  async asignarOT(
+    @Param('id') id: string,
+    @Body() body: { idTecnico: number },
+  ) {
+    await opeRepo.asignarOT(parseInt(id), body.idTecnico);
+    return { msg: 'Técnico asignado correctamente' };
+  }
 }

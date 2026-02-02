@@ -218,6 +218,10 @@ class OperationsService {
     async subirEvidencia(id: number, base64: string, tipo: string) {
         return api.post(`/inv/operaciones/ot/${id}/evidencia`, { base64, tipo });
     }
+
+    async asignarOT(idOT: number, idTecnico: number) {
+        return api.post(`/inv/operaciones/ot/${idOT}/asignar`, { idTecnico });
+    }
 }
 
 // Planning Service (Tasks)
