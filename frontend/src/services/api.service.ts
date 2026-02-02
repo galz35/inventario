@@ -2,7 +2,10 @@ import axios from 'axios';
 
 // Base Configuration
 // Global prefix 'api' is set in main.ts, so we include it here.
-const API_URL = 'http://localhost:3000/api';
+// Base Configuration
+// Global prefix 'api' is set in main.ts, so we include it here.
+// Use relative path in production or environment variable if set
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3000/api');
 
 const api = axios.create({
     baseURL: API_URL,
@@ -23,8 +26,8 @@ api.interceptors.request.use(config => {
 // Auth Service
 class AuthService {
     async login(correo: string, password: string) {
-        // Authenticator controller is at 'auth' prefix in backend
-        return api.post('/auth/login', { correo, password });
+        // Authenticator controller check: User indicates InvAuthController at /inv/auth/login
+        return api.post('/inv/auth/login', { correo, password });
     }
 
     logout() {
