@@ -62,7 +62,8 @@ export const OperacionesView = () => {
             setTiposOT(resTipos.data.data || resTipos.data || []);
             setClientes(resClientes.data.data || resClientes.data || []);
             setProyectos(resProyectos.data.data || resProyectos.data || []);
-        } catch (e) {
+        } catch (e: any) {
+            if (e.response && (e.response.status === 401 || e.response.status === 403)) return;
             console.error('Error fetching catalogs', e);
         }
     };

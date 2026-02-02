@@ -22,13 +22,22 @@ api.interceptors.request.use(config => {
     }
     return config;
 }, error => {
-    if (error.response && error.response.status === 401) {
-        localStorage.removeItem('inv_token');
-        localStorage.removeItem('inv_user');
-        window.location.href = '/';
-    }
     return Promise.reject(error);
 });
+
+// Interceptor for Response Errors (Global 401 Handling)
+api.interceptors.response.use(
+    response => response,
+    error => {
+        if (error.response && error.response.status === 401) {
+            console.warn('[API] Session expired or unauthorized. Redirecting to login.');
+            localStorage.removeItem('inv_token');
+            localStorage.removeItem('inv_user');
+            window.location.href = '/';
+        }
+        return Promise.reject(error);
+    }
+);
 
 // Auth Service
 class AuthService {
