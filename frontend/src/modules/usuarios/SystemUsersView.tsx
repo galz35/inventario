@@ -3,7 +3,7 @@ import { authService, invService, opeService } from '../../services/api.service'
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { alertSuccess, alertError } from '../../services/alert.service';
-import { Plus, Shield, History, PenTool, Search } from 'lucide-react';
+import { Plus, Shield, History, PenTool, Search, UserCircle } from 'lucide-react';
 
 export const SystemUsersView = () => {
     // State
@@ -121,21 +121,44 @@ export const SystemUsersView = () => {
         },
         {
             key: 'nombre',
-            label: 'Nombre Completo',
+            label: 'Usuario / Identificador',
             render: (val: string, row: any) => (
-                <div style={{ fontWeight: 600, color: row.activo ? '#e2e8f0' : '#94a3b8' }}>{val}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                        width: '36px', height: '36px',
+                        borderRadius: '10px',
+                        background: 'rgba(59, 130, 246, 0.1)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--primary)'
+                    }}>
+                        <UserCircle size={20} />
+                    </div>
+                    <div>
+                        <div style={{ fontWeight: 600, color: row.activo ? '#e2e8f0' : '#94a3b8' }}>{val}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{row.carnet || 'Sin Carnet'}</div>
+                    </div>
+                </div>
             )
         },
         {
             key: 'rolNombre',
-            label: 'Perfil / Rol',
-            render: (val: string) => (
-                <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                    {val || 'Usuario'}
-                </span>
-            )
+            label: 'Perfil / Permisos',
+            render: (val: string) => {
+                const colors: any = {
+                    'ADMIN': { bg: 'rgba(239, 68, 68, 0.1)', text: '#f87171' },
+                    'TECNICO': { bg: 'rgba(16, 185, 129, 0.1)', text: '#34d399' },
+                    'SUPERVISOR': { bg: 'rgba(245, 158, 11, 0.1)', text: '#fbbf24' },
+                    'BODEGA': { bg: 'rgba(99, 102, 241, 0.1)', text: '#818cf8' }
+                };
+                const style = colors[val?.toUpperCase()] || { bg: 'rgba(255,255,255,0.05)', text: '#94a3b8' };
+                return (
+                    <span className="badge" style={{ background: style.bg, color: style.text, border: `1px solid ${style.text}22` }}>
+                        {val || 'Usuario'}
+                    </span>
+                );
+            }
         },
-        { key: 'correo', label: 'Correo Electrónico' },
+        { key: 'correo', label: 'Correo' },
         {
             key: 'actions',
             label: 'Opciones',

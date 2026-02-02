@@ -103,7 +103,7 @@ export const WorkloadView = () => {
         {
             key: 'acciones',
             label: 'Operación',
-            render: (_: any, row: any) => (
+            render: () => (
                 <button
                     className="btn-primary"
                     style={{ padding: '6px 12px', fontSize: '0.75rem', background: 'var(--accent)' }}
