@@ -163,7 +163,7 @@ export default function App() {
           {isAdmin && (
             <>
               <SidebarSection label="Sistema" show={isSidebarOpen || !isMobile} />
-              <SidebarLink active={view === 'usuarios'} icon={UserCog} label="Gestión Usuarios" onClick={() => setView('usuarios')} showLabel={isSidebarOpen || !isMobile} />
+
               <SidebarLink active={view === 'admin-usuarios'} icon={UserCog} label="Admin Usuarios" onClick={() => setView('admin-usuarios')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'activos'} icon={Settings} label="Activos y Herramientas" onClick={() => setView('activos')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'almacenes'} icon={Building2} label="Almacenes" onClick={() => setView('almacenes')} showLabel={isSidebarOpen || !isMobile} />
