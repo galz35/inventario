@@ -39,14 +39,18 @@ export const ConsignacionView = () => {
         try {
             const res = await invService.getCatalog('proveedores');
             setProviders(res.data.data || res.data || []);
-        } catch (e) { console.error(e); }
+        } catch (e: any) {
+            if (e.response && e.response.status === 401) return;
+            console.error(e);
+        }
     };
 
     const fetchHistory = async () => {
         try {
             const res = await invService.getLiquidations();
             setLiquidations(res.data.data || res.data || []);
-        } catch (e) {
+        } catch (e: any) {
+            if (e.response && e.response.status === 401) return;
             console.error(e);
         }
     };
