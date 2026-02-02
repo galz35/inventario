@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react';
-import { authService } from '../../services/api.service';
+import { authService, invService, opeService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { alertSuccess, alertError } from '../../services/alert.service';
-import { User, Activity, Plus, HardHat } from 'lucide-react';
+import { User, Activity, Plus, HardHat, PenTool, History } from 'lucide-react';
 
 export const UsuariosView = () => {
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
+    // Profile Modal
+    const [profileModalOpen, setProfileModalOpen] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<any>(null);
+    const [userAssets, setUserAssets] = useState<any[]>([]);
+    const [userHistory, setUserHistory] = useState<any[]>([]);
+    const [loadingProfile, setLoadingProfile] = useState(false);
 
     // Stats
     const [stats, setStats] = useState({ total: 0, activos: 0, tecnicos: 0 });
@@ -43,6 +49,31 @@ export const UsuariosView = () => {
             console.error(e);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleViewProfile = async (user: any) => {
+        setSelectedUser(user);
+        setProfileModalOpen(true);
+        setLoadingProfile(true);
+        try {
+            // Parallel fetch: Assets and OTs
+            const [resAssets, resOTs] = await Promise.all([
+                invService.getActivos(), // We'll filter client side for now as getActivos returns all usually
+                opeService.listarOTs({ idTecnico: user.idUsuario })
+            ]);
+
+            // Filter assets for this user
+            const allAssets = resAssets.data.data || resAssets.data || [];
+            const myAssets = allAssets.filter((a: any) => a.idTecnicoActual === user.idUsuario);
+            setUserAssets(myAssets);
+
+            setUserHistory(resOTs.data.data || resOTs.data || []);
+        } catch (e) {
+            console.error('Error loading profile', e);
+            alertError('Error al cargar ficha técnica');
+        } finally {
+            setLoadingProfile(false);
         }
     };
 
@@ -120,13 +151,22 @@ export const UsuariosView = () => {
             key: 'acciones',
             label: 'Acciones',
             render: (_: any, row: any) => (
-                <button
-                    className={row.activo ? "btn-secondary" : "btn-primary"}
-                    style={{ padding: '4px 10px', fontSize: '0.75rem', background: row.activo ? '' : '#10b981' }}
-                    onClick={() => handleToggleStatus(row)}
-                >
-                    {row.activo ? 'Inhabilitar' : 'Activar'}
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                        className="btn-secondary"
+                        style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                        onClick={() => handleViewProfile(row)}
+                    >
+                        <User size={14} style={{ marginRight: '4px' }} /> Ficha
+                    </button>
+                    <button
+                        className={row.activo ? "btn-secondary" : "btn-primary"}
+                        style={{ padding: '4px 8px', fontSize: '0.75rem', background: row.activo ? '' : '#10b981' }}
+                        onClick={() => handleToggleStatus(row)}
+                    >
+                        {row.activo ? 'Inhab.' : 'Activar'}
+                    </button>
+                </div>
             )
         }
     ];
@@ -207,6 +247,66 @@ export const UsuariosView = () => {
                             <option value="4">Bodega</option>
                             <option value="1">Administrador</option>
                         </select>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Profile Detail Modal */}
+            <Modal
+                isOpen={profileModalOpen}
+                onClose={() => setProfileModalOpen(false)}
+                title={`Ficha Técnica: ${selectedUser?.nombre || ''}`}
+                width="800px"
+            >
+                <div>
+                    {/* Section 1: Assigned Assets */}
+                    <div style={{ marginBottom: '30px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
+                            <PenTool size={20} color="var(--accent)" />
+                            <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Herramientas Asignadas</h3>
+                        </div>
+                        {loadingProfile ? (
+                            <p>Cargando inventario...</p>
+                        ) : userAssets.length === 0 ? (
+                            <div style={{ padding: '20px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', textAlign: 'center', color: '#888' }}>
+                                No tiene activos ni herramientas asignadas actualmente.
+                            </div>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                                {userAssets.map((asset, i) => (
+                                    <div key={i} style={{ padding: '10px', background: '#1e293b', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                                        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{asset.productoNombre}</div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>S/N: {asset.serial}</div>
+                                        <div style={{ fontSize: '0.7rem', color: '#888', marginTop: '5px' }}>Estado: {asset.estado}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Section 2: History */}
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
+                            <History size={20} color="#10b981" />
+                            <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Historial de Casos (Últimos 50)</h3>
+                        </div>
+                        {loadingProfile ? (
+                            <p>Cargando historial...</p>
+                        ) : (
+                            <div style={{ maxHeight: '300px', overflowY: 'auto' }} className="custom-scroll">
+                                <DataTable
+                                    title=""
+                                    columns={[
+                                        { key: 'idOT', label: 'OT', render: (v: any) => <b>#{v}</b> },
+                                        { key: 'fechaCreacion', label: 'Fecha', render: (d: string) => new Date(d).toLocaleDateString() },
+                                        { key: 'tipoOT', label: 'Tipo' },
+                                        { key: 'clienteNombre', label: 'Cliente' },
+                                        { key: 'estado', label: 'Estado', render: (v: string) => <span className="badge">{v}</span> }
+                                    ]}
+                                    data={userHistory}
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             </Modal>
