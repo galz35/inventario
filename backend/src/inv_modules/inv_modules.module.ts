@@ -10,6 +10,7 @@ import { ConsignacionController } from './inventario/consignacion.controller';
 import { InvAuthController } from './auth/inv_auth.controller';
 import { CatalogosController } from './catalogos/catalogos.controller';
 import { PlanificacionController } from './operaciones/planificacion.controller';
+import { VehiculosController } from './vehiculos/vehiculos.controller';
 import { MailService } from '../common/services/mail.service';
 import { StorageService } from '../common/services/storage.service';
 import { ExcelService } from '../common/services/excel.service';
@@ -35,8 +36,9 @@ import { ExcelService } from '../common/services/excel.service';
     InvAuthController,
     CatalogosController,
     PlanificacionController,
+    VehiculosController,
   ],
   providers: [MailService, StorageService, ExcelService],
   exports: [MailService, StorageService, ExcelService],
 })
-export class InvModulesModule {}
+export class InvModulesModule { }

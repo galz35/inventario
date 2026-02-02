@@ -272,7 +272,27 @@ class PlanningService {
     }
 }
 
+// Vehicles Service
+class VehiculosService {
+    async getVehiculos() {
+        return api.get('/inv/vehiculos');
+    }
+
+    async upsertVehiculo(data: any) {
+        return api.post('/inv/vehiculos', data);
+    }
+
+    async getLogs(idVehiculo?: number) {
+        return api.get('/inv/vehiculos/logs', { params: { idVehiculo } });
+    }
+
+    async registrarLog(data: any) {
+        return api.post('/inv/vehiculos/log', data);
+    }
+}
+
 export const authService = new AuthService();
 export const invService = new InventoryService();
 export const opeService = new OperationsService();
 export const planService = new PlanningService();
+export const vehService = new VehiculosService();

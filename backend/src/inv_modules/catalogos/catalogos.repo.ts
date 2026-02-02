@@ -28,7 +28,12 @@ export async function listarClientes() {
 }
 
 export async function listarTiposOT() {
-  return await ejecutarSP('Inv_sp_cat_listar', { entidad: 'TIPO_OT' });
+  try {
+    return await ejecutarSP('Inv_sp_cat_listar', { entidad: 'TIPO_OT' });
+  } catch (error) {
+    console.warn('⚠️ SP Inv_sp_cat_listar (TIPO_OT) falló. Usando Query de respaldo.');
+    return await ejecutarQuery('SELECT idTipoOT as id, nombre FROM Inv_cat_tipos_ot');
+  }
 }
 
 export async function listarUsuarios() {

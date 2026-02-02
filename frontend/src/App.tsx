@@ -13,14 +13,13 @@ import { TransferenciasView } from './modules/inventario/TransferenciasView';
 
 import { SystemUsersView } from './modules/usuarios/SystemUsersView';
 import { WorkloadView } from './modules/usuarios/WorkloadView';
-
-
 import { DashboardView } from './modules/dashboard/DashboardView';
 import {
   LayoutDashboard, Box, Truck, Calendar, ClipboardList, PenTool,
   Settings, Building2, FolderOpen, LogOut, ChevronLeft, ChevronRight,
-  UserCircle, FileText, UserCog, Users
+  UserCircle, FileText, UserCog, Users, Car
 } from 'lucide-react';
+import { VehiculosView } from './modules/vehiculos/VehiculosView';
 
 const SidebarSection = ({ label, show }: { label: string, show: boolean }) => (
   show ? <div style={{
@@ -165,6 +164,7 @@ export default function App() {
               <SidebarSection label="Sistema" show={isSidebarOpen || !isMobile} />
 
               <SidebarLink active={view === 'workload'} icon={Users} label="Carga de Trabajo" onClick={() => setView('workload')} showLabel={isSidebarOpen || !isMobile} />
+              <SidebarLink active={view === 'vehiculos'} icon={Car} label="Control Flota" onClick={() => setView('vehiculos')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'sys-users'} icon={UserCog} label="Usuarios" onClick={() => setView('sys-users')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'activos'} icon={Settings} label="Activos y Herramientas" onClick={() => setView('activos')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'almacenes'} icon={Building2} label="Almacenes" onClick={() => setView('almacenes')} showLabel={isSidebarOpen || !isMobile} />
@@ -239,6 +239,7 @@ export default function App() {
           {view === 'usuarios' && <SystemUsersView />}
           {view === 'sys-users' && <SystemUsersView />}
           {view === 'workload' && <WorkloadView />}
+          {view === 'vehiculos' && <VehiculosView />}
         </div>
       </main>
     </div>
