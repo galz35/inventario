@@ -36,7 +36,6 @@ export class InventarioController {
   }
 
   @Get('transferencias')
-  @Roles('ADMIN', 'AUDITOR', 'SUPERVISOR', 'TECNICO', 'DESPACHO', 'BODEGA')
   async getTransferencias(
     @Query('almacenId') almacenId?: string,
     @Query('estado') estado?: string,
@@ -48,7 +47,6 @@ export class InventarioController {
   }
 
   @Get('transferencias/:id/detalles')
-  @Roles('ADMIN', 'AUDITOR', 'SUPERVISOR', 'TECNICO', 'DESPACHO', 'BODEGA')
   async getTransferenciaDetalles(@Param('id') id: string) {
     return await invRepo.obtenerTransferenciaDetalles(parseInt(id));
   }

@@ -15,7 +15,6 @@ import { Roles } from '../../auth/roles.decorator';
 
 @Controller('inv/reportes')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'SUPERVISOR', 'AUDITOR', 'TECNICO', 'DESPACHO', 'BODEGA')
 export class ReportesController {
   constructor(private mailService: MailService) { }
 

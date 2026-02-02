@@ -37,7 +37,11 @@ export const SystemUsersView = () => {
             // Defensive: ensure we get an array
             const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
             setUsers(data);
-        } catch (error) {
+        } catch (error: any) {
+            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+                setUsers([]);
+                return;
+            }
             console.error('Error loading users:', error);
             setUsers([]);
         } finally {
