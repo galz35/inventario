@@ -127,6 +127,40 @@ export async function obtenerKardex(filtros: {
 }
 
 /**
+ * Obtiene el Kardex detallado visual de un producto
+ */
+export async function obtenerHistoriaProducto(productoId: number, almacenId?: number) {
+  let query = `
+      SELECT 
+          m.fechaMovimiento,
+          m.tipoMovimiento,
+          m.referenciaTexto,
+          md.cantidad,
+          md.stockNuevo as saldo,
+          u.nombre as usuario,
+          almOr.nombre as origen,
+          almDe.nombre as destino
+      FROM Inv_inv_movimientos m
+      JOIN Inv_inv_movimiento_detalle md ON m.idMovimiento = md.idMovimiento
+      JOIN Inv_seg_usuarios u ON m.idUsuarioResponsable = u.idUsuario
+      LEFT JOIN Inv_cat_almacenes almOr ON m.almacenOrigenId = almOr.idAlmacen
+      LEFT JOIN Inv_cat_almacenes almDe ON m.almacenDestinoId = almDe.idAlmacen
+      WHERE md.productoId = @prodId 
+  `;
+
+  if (almacenId) {
+    query += ` AND (m.almacenOrigenId = @almId OR m.almacenDestinoId = @almId)`;
+  }
+
+  query += ` ORDER BY m.fechaMovimiento DESC`;
+
+  return await ejecutarQuery(query, {
+    prodId: { valor: productoId, tipo: Int },
+    almId: { valor: almacenId || null, tipo: Int }
+  });
+}
+
+/**
  * Inicia una transferencia entre almacenes (Resta stock de origen)
  */
 /**

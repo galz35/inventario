@@ -1,0 +1,1322 @@
+Documento de Implementación — INV2025
+
+Inventario + Órdenes de Trabajo + Proyectos + Activos + Consignación
+
+SECCIÓN 0 — Resumen
+0.1 Objetivo del sistema
+
+Controlar inventario y operaciones de campo para una empresa de servicios (telecom HFC) que atiende clientes por Órdenes de Trabajo (OT) y también ejecuta Proyectos, consumiendo materiales y gestionando equipos/activos serializados con trazabilidad total.
+
+0.2 Usuarios y roles
+
+Administrador
+
+Bodega
+
+Supervisor
+
+Técnico
+
+Gerencia (solo lectura)
+
+Backoffice/Despacho (opcional)
+
+0.3 Módulos
+
+Seguridad (login, roles, permisos, auditoría)
+
+Catálogos (productos, proveedores, clientes, tipos OT, motivos)
+
+Almacenes (multi-almacén con jerarquía, técnico, proyecto)
+
+Inventario consumible (stock exacto, kardex, movimientos)
+
+Transferencias (con confirmación)
+
+Consignación (propiedad proveedor + liquidación)
+
+OT/Casos (estados, checklist, evidencia, firma, consumo)
+
+Proyectos (etapas/tareas, avance, consumo, costo)
+
+Activos serializados (herramientas/equipos: asignación, reparación, baja)
+
+Equipos instalados en cliente (instalar, retirar, reemplazar)
+
+Conteo físico (snapshot → captura → aprobación → aplicación)
+
+Reportes operativos y gerenciales
+
+0.4 Beneficios operativos medibles
+
+Stock exacto por almacén y por propietario (empresa/proveedor)
+
+Reducción de pérdidas por merma/daño/ajustes sin control
+
+Trazabilidad por OT/proyecto/técnico (qué se consumió, cuándo, por quién)
+
+Control de activos serializados (ubicación y estado real)
+
+Liquidación clara de consignación por proveedor y período
+
+0.5 Fuera de alcance (por defecto)
+
+Facturación / caja / POS
+
+Compras completas (ciclo de orden de compra, recepción formal, cuentas por pagar)
+
+Contabilidad formal (asientos)
+
+Integración con ERP (si no se solicita)
+
+SECCIÓN 1 — Principios no negociables
+1.1 Inventario exacto por movimientos
+
+Prohibido editar stock directo (UPDATE/DELETE) en tabla de stock.
+
+Todo cambio de stock se produce únicamente por Movimientos (kardex) ejecutados por Stored Procedures (SP) transaccionales.
+
+1.2 Atomicidad (validar + aplicar)
+
+La validación de stock y el descuento/aumento deben ocurrir en la misma transacción.
+
+No se acepta “validar en backend y luego descontar” porque es vulnerable a concurrencia.
+
+1.3 Concurrencia controlada
+
+En SP críticos se aplican locks sobre las filas afectadas del stock:
+
+UPDLOCK, HOLDLOCK (o equivalente) para evitar carreras.
+
+El sistema debe prevenir stock negativo por concurrencia.
+
+1.4 Auditoría real por usuario de aplicación
+
+SYSTEM_USER no sirve para auditoría funcional (la app suele usar un usuario DB común).
+
+Se debe registrar el usuario de la aplicación en cada acción:
+
+usando SESSION_CONTEXT desde SQL Server
+
+y/o tabla de auditoría de eventos a nivel aplicación.
+
+1.5 UX simple + eficiente + bonito
+
+No significa “todo en 1 paso”.
+
+Significa:
+
+1 acción principal por pantalla,
+
+flujos guiados,
+
+validaciones claras,
+
+“Avanzado” colapsado,
+
+mínimo clics sin romper controles (ej: confirmación de transferencias, aprobación de conteos).
+
+SECCIÓN 2 — Glosario
+
+Almacén padre / sub-almacén: jerarquía de almacenes. Ej: Central (padre) → Regional (hijo) → Técnico (hijo).
+
+Kardex: historial de movimientos que explica cada cambio de stock.
+
+Movimiento: transacción que modifica stock (entrada, consumo, transferencia, ajuste, merma, devolución).
+
+Consignación: stock propiedad de proveedor, separado del stock de empresa.
+
+OT (Orden de Trabajo) / Caso: unidad de atención a cliente (instalación, mantenimiento, reparación).
+
+Proyecto: ejecución planificada que agrupa OTs y consumos.
+
+Consumo: salida de material usada en OT/proyecto.
+
+Activo fijo (serializado): herramienta/equipo con serial único controlado por estados y ubicación.
+
+Equipo instalado (serializado): equipo colocado en cliente (ONT/router/modem), se instala/retira/reemplaza.
+
+Conteo físico: proceso de comparar físico vs sistema y aplicar ajustes controlados.
+
+Ajuste: corrección de stock (solo por conteo o aprobación con motivo).
+
+Merma / daño / pérdida: salida por material dañado/perdido, siempre con motivo y trazabilidad.
+
+Confirmación de transferencia: acto controlado que recién ahí genera movimientos y cambia stock.
+
+SECCIÓN 3 — Roles, permisos, login, seguridad
+3.1 Roles mínimos y alcance
+
+Administrador: todo.
+
+Bodega: catálogos operativos, movimientos, transferencias, conteo, reportes operativos.
+
+Supervisor: aprobación (conteos, ajustes, bajas), cierre OT si aplica, reportes.
+
+Técnico: sus OT, su almacén técnico, consumo, devolución, evidencias, firma, activos asignados.
+
+Gerencia: lectura reportes.
+
+Backoffice/Despacho: crear OT, asignar técnico, agenda.
+
+3.2 Matriz de permisos (modelo)
+
+Acciones: VER, CREAR, EDITAR, ELIMINAR, APROBAR, EXPORTAR
+Módulos: Usuarios/Roles, Catálogos, Almacenes, Inventario, Kardex, Transferencias, Consignación, OT, Proyectos, Activos, Conteo, Reportes, Parámetros
+
+Reglas específicas:
+
+Técnico no ve otros técnicos, ni otros almacenes, ni movimientos globales.
+
+Ajustes manuales, aplicar conteo y baja de activo requieren APROBAR.
+
+3.3 Seguridad técnica
+
+Password: bcrypt.
+
+JWT 15–30 min.
+
+Refresh 7–30 días, guardado hasheado, revocable.
+
+Logout revoca refresh.
+
+Usuario activo/inactivo.
+
+Rate limit login.
+
+Auditoría de acciones (eventos) obligatoria.
+
+SECCIÓN 4 — Arquitectura de datos (SQL Server)
+
+Regla de nombres: prefijo Inv_ en tablas y Inv_sp_ en SP.
+Si tu proyecto ya tiene nombres distintos, mantén consistencia pero NO mezcles.
+
+4.1 Entidades principales (diagrama lógico en texto)
+
+Seguridad:
+
+Inv_seg_usuarios ←→ Inv_seg_roles (N:N por Inv_seg_usuario_roles)
+
+Inv_seg_roles ←→ Inv_seg_permisos (N:N por Inv_seg_rol_permisos)
+
+Inv_seg_refresh_tokens
+
+Inv_seg_auditoria_eventos
+
+Catálogos:
+
+Inv_cat_productos (consumible / serializado)
+
+Inv_cat_proveedores
+
+Inv_cat_clientes
+
+Inv_cat_almacenes (jerarquía)
+
+Inv_cat_tipos_ot (reglas de cierre)
+
+Inv_cat_motivos_movimiento
+
+Operación:
+
+Inv_ope_ot (OT)
+
+Inv_ope_ot_consumo (vínculo OT ↔ movimiento inventario)
+
+Inv_ope_proyectos (+ etapas/tareas)
+
+Inventario consumible:
+
+Inv_inv_stock
+
+Inv_inv_movimientos (header)
+
+Inv_inv_movimiento_detalle (detail)
+
+Inv_inv_transferencias (+ detalle)
+
+Inv_inv_conteos (+ detalle)
+
+Activos serializados:
+
+Inv_act_activos
+
+Inv_act_movimientos (historial)
+
+Inv_act_reparaciones
+
+4.2 Tabla Inv_inv_stock (clave exacta)
+
+Clave lógica:
+
+almacenId
+
+productoId
+
+propietarioTipo (EMPRESA o PROVEEDOR)
+
+proveedorId (nullable, requerido si PROVEEDOR)
+
+Campos mínimos:
+
+cantidad decimal(18,2)
+
+auditoría created_at/by, updated_at/by
+
+Constraint recomendado:
+
+UNIQUE(almacenId, productoId, propietarioTipo, proveedorId)
+
+Índice mínimo:
+
+IX_stock_key(almacenId, productoId, propietarioTipo, proveedorId)
+
+4.3 Tabla Inv_inv_movimientos (header)
+
+Campos mínimos:
+
+idMovimiento PK
+
+fechaMovimiento
+
+tipoMovimiento (catálogo controlado)
+
+almacenOrigenId null
+
+almacenDestinoId null
+
+referenciaTipo (OT,TRANSFERENCIA,CONTEO,AJUSTE, etc.)
+
+referenciaId null
+
+referenciaTexto null
+
+idUsuarioResponsable (usuario app)
+
+auditoría created/updated
+
+Índice mínimo:
+
+(fechaMovimiento, tipoMovimiento, almacenOrigenId, almacenDestinoId)
+
+4.4 Tabla Inv_inv_movimiento_detalle (detail)
+
+Campos mínimos:
+
+idMovimiento FK
+
+productoId
+
+propietarioTipo
+
+proveedorId null
+
+cantidad (lo ingresado)
+
+delta (signo aplicado: + entrada, - salida)
+
+unit_cost (costo congelado al movimiento)
+
+stockNuevo (saldo final luego de aplicar)
+
+observacion null
+
+Índice mínimo:
+
+(productoId, idMovimiento) + filtros por almacenes via join al header
+
+4.5 Tabla Inv_act_activos
+
+Campos mínimos:
+
+idActivo
+
+idProducto (producto serializado)
+
+serial UNIQUE
+
+serial_normalizado UNIQUE (opcional, recomendado)
+
+estado (controlado)
+
+ubicación actual:
+
+idAlmacenActual null
+
+idTecnicoActual null
+
+idClienteActual null
+
+fechaIngreso
+
+auditoría
+
+SECCIÓN 5 — SP-First enterprise (plantillas listas)
+
+Esta sección es para que Gemini copie el patrón.
+Ajustar nombres reales del repo si difieren.
+
+5.1 Auditoría por SESSION_CONTEXT (obligatorio)
+
+La app debe establecer el usuario antes de ejecutar SP:
+
+EXEC sys.sp_set_session_context @key=N'app_user_id', @value=@idUsuario;
+EXEC sys.sp_set_session_context @key=N'app_username', @value=@username;
+
+
+En SP:
+
+DECLARE @AppUserId INT = TRY_CONVERT(INT, SESSION_CONTEXT(N'app_user_id'));
+DECLARE @AppUser NVARCHAR(100) = TRY_CONVERT(NVARCHAR(100), SESSION_CONTEXT(N'app_username'));
+IF @AppUserId IS NULL SET @AppUserId = 0;
+
+5.2 TVP para items de movimiento (evita N+1)
+CREATE TYPE Inv_tvp_mov_items AS TABLE(
+  productoId INT NOT NULL,
+  cantidad DECIMAL(18,2) NOT NULL,
+  propietarioTipo VARCHAR(20) NOT NULL,   -- 'EMPRESA' o 'PROVEEDOR'
+  proveedorId INT NULL,                   -- requerido si PROVEEDOR
+  unit_cost DECIMAL(18,2) NULL,           -- si viene NULL, tomar de producto
+  observacion NVARCHAR(200) NULL
+);
+
+5.3 SP central de movimiento (corazón del inventario)
+
+Nombre: Inv_sp_inv_movimiento_registrar
+Objetivo: aplicar cualquier cambio de stock de forma atómica y auditable.
+
+CREATE OR ALTER PROCEDURE Inv_sp_inv_movimiento_registrar
+  @tipoMovimiento VARCHAR(30),
+  @almacenOrigenId INT = NULL,
+  @almacenDestinoId INT = NULL,
+  @referenciaTipo VARCHAR(30) = NULL,
+  @referenciaId INT = NULL,
+  @referenciaTexto NVARCHAR(200) = NULL,
+  @items Inv_tvp_mov_items READONLY,
+  @idMovimiento INT OUTPUT,
+  @ok BIT OUTPUT,
+  @codigo INT OUTPUT,
+  @mensaje NVARCHAR(4000) OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET XACT_ABORT ON;
+
+  DECLARE @AppUserId INT = TRY_CONVERT(INT, SESSION_CONTEXT(N'app_user_id'));
+  IF @AppUserId IS NULL SET @AppUserId = 0;
+
+  BEGIN TRY
+    BEGIN TRAN;
+
+    IF NOT EXISTS(SELECT 1 FROM @items)
+      THROW 50001, 'Movimiento sin items.', 1;
+
+    -- Validación propietario PROVEEDOR requiere proveedorId
+    IF EXISTS(SELECT 1 FROM @items WHERE propietarioTipo='PROVEEDOR' AND proveedorId IS NULL)
+      THROW 50002, 'Item PROVEEDOR requiere proveedorId.', 1;
+
+    INSERT INTO Inv_inv_movimientos(
+      fechaMovimiento, tipoMovimiento,
+      almacenOrigenId, almacenDestinoId,
+      referenciaTipo, referenciaId, referenciaTexto,
+      idUsuarioResponsable
+    )
+    VALUES(
+      SYSUTCDATETIME(), @tipoMovimiento,
+      @almacenOrigenId, @almacenDestinoId,
+      @referenciaTipo, @referenciaId, @referenciaTexto,
+      NULLIF(@AppUserId,0)
+    );
+
+    SET @idMovimiento = SCOPE_IDENTITY();
+
+    ;WITH x AS (
+      SELECT
+        i.productoId,
+        i.propietarioTipo,
+        i.proveedorId,
+        i.cantidad,
+        CASE
+          WHEN @tipoMovimiento IN ('ENTRADA_COMPRA','ENTRADA_CONSIGNACION','TRANSFERENCIA_ENTRADA','DEVOLUCION_OT')
+            THEN +ABS(i.cantidad)
+          WHEN @tipoMovimiento IN ('CONSUMO_OT','TRANSFERENCIA_SALIDA','MERMA_DANO','DEVOLUCION_PROVEEDOR')
+            THEN -ABS(i.cantidad)
+          WHEN @tipoMovimiento IN ('AJUSTE_CONTEO','AJUSTE_MANUAL')
+            THEN i.cantidad
+          ELSE i.cantidad
+        END AS delta,
+        i.unit_cost,
+        i.observacion
+      FROM @items i
+    ),
+    k AS (
+      SELECT
+        ISNULL(@almacenOrigenId, @almacenDestinoId) AS almacenId,
+        productoId, propietarioTipo, proveedorId,
+        SUM(delta) AS deltaTotal
+      FROM x
+      GROUP BY productoId, propietarioTipo, proveedorId
+    )
+    -- Lock de keys existentes
+    SELECT s.almacenId
+    FROM Inv_inv_stock s WITH (UPDLOCK, HOLDLOCK)
+    JOIN k ON s.almacenId = k.almacenId
+         AND s.productoId = k.productoId
+         AND s.propietarioTipo = k.propietarioTipo
+         AND ISNULL(s.proveedorId,0)=ISNULL(k.proveedorId,0);
+
+    -- Upsert stock bajo transacción
+    MERGE Inv_inv_stock AS t
+    USING k AS src
+    ON  t.almacenId = src.almacenId
+    AND t.productoId = src.productoId
+    AND t.propietarioTipo = src.propietarioTipo
+    AND ISNULL(t.proveedorId,0) = ISNULL(src.proveedorId,0)
+    WHEN MATCHED THEN
+      UPDATE SET t.cantidad = t.cantidad + src.deltaTotal
+    WHEN NOT MATCHED THEN
+      INSERT(almacenId, productoId, propietarioTipo, proveedorId, cantidad)
+      VALUES(src.almacenId, src.productoId, src.propietarioTipo, src.proveedorId, src.deltaTotal);
+
+    -- Validar no negativo (por defecto)
+    IF EXISTS(
+      SELECT 1
+      FROM Inv_inv_stock s
+      JOIN k ON s.almacenId = k.almacenId
+           AND s.productoId = k.productoId
+           AND s.propietarioTipo = k.propietarioTipo
+           AND ISNULL(s.proveedorId,0)=ISNULL(k.proveedorId,0)
+      WHERE s.cantidad < 0
+    )
+      THROW 50003, 'Stock insuficiente. Operación rechazada.', 1;
+
+    -- Insertar detalle con costo congelado y saldo final
+    INSERT INTO Inv_inv_movimiento_detalle(
+      idMovimiento, productoId, propietarioTipo, proveedorId,
+      cantidad, delta, unit_cost, observacion, stockNuevo
+    )
+    SELECT
+      @idMovimiento,
+      x.productoId, x.propietarioTipo, x.proveedorId,
+      x.cantidad, x.delta,
+      COALESCE(x.unit_cost, p.costo),
+      x.observacion,
+      s.cantidad
+    FROM x
+    JOIN Inv_cat_productos p ON p.idProducto = x.productoId
+    JOIN Inv_inv_stock s ON s.almacenId = ISNULL(@almacenOrigenId, @almacenDestinoId)
+      AND s.productoId = x.productoId
+      AND s.propietarioTipo = x.propietarioTipo
+      AND ISNULL(s.proveedorId,0)=ISNULL(x.proveedorId,0);
+
+    -- (Opcional) Insert auditoría de evento aquí
+
+    COMMIT;
+    SET @ok=1; SET @codigo=0; SET @mensaje='OK';
+  END TRY
+  BEGIN CATCH
+    IF XACT_STATE() <> 0 ROLLBACK;
+    SET @ok=0;
+    SET @codigo = ERROR_NUMBER();
+    SET @mensaje = ERROR_MESSAGE();
+    THROW;
+  END CATCH
+END
+
+5.4 SP consumo OT (usa movimiento central)
+
+Objetivo: consumir materiales desde almacén técnico para una OT.
+
+Requisitos:
+
+OT debe existir y estar asignada al técnico (Pendiente por confirmar la regla exacta).
+
+Debe registrar vínculo OT ↔ movimiento.
+
+No N+1. Items por TVP.
+
+CREATE OR ALTER PROCEDURE Inv_sp_ot_consumir_material
+  @idOT INT,
+  @almacenTecnicoId INT,
+  @items Inv_tvp_mov_items READONLY,
+  @idMovimiento INT OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET XACT_ABORT ON;
+
+  DECLARE @ok BIT, @codigo INT, @mensaje NVARCHAR(4000);
+
+  BEGIN TRY
+    BEGIN TRAN;
+
+    -- Validar OT existe
+    IF NOT EXISTS(SELECT 1 FROM Inv_ope_ot WHERE idOT=@idOT)
+      THROW 51001, 'OT no existe.', 1;
+
+    -- Registrar movimiento (salida)
+    EXEC Inv_sp_inv_movimiento_registrar
+      @tipoMovimiento='CONSUMO_OT',
+      @almacenOrigenId=@almacenTecnicoId,
+      @almacenDestinoId=NULL,
+      @referenciaTipo='OT',
+      @referenciaId=@idOT,
+      @referenciaTexto=NULL,
+      @items=@items,
+      @idMovimiento=@idMovimiento OUTPUT,
+      @ok=@ok OUTPUT,
+      @codigo=@codigo OUTPUT,
+      @mensaje=@mensaje OUTPUT;
+
+    -- Vincular OT ↔ movimiento
+    INSERT INTO Inv_ope_ot_consumo(idOT, idMovimiento, fechaConsumo)
+    VALUES(@idOT, @idMovimiento, SYSUTCDATETIME());
+
+    COMMIT;
+  END TRY
+  BEGIN CATCH
+    IF XACT_STATE() <> 0 ROLLBACK;
+    THROW;
+  END CATCH
+END
+
+5.5 SP confirmar transferencia (genera 2 movimientos)
+
+Regla UX: crear transferencia es simple. Stock cambia solo al confirmar recepción.
+
+CREATE OR ALTER PROCEDURE Inv_sp_inv_transferencia_confirmar
+  @idTransferencia INT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET XACT_ABORT ON;
+
+  BEGIN TRY
+    BEGIN TRAN;
+
+    -- Validar existe y está PENDIENTE
+    -- (campos exactos Pendiente por confirmar)
+    IF NOT EXISTS(SELECT 1 FROM Inv_inv_transferencias WHERE idTransferencia=@idTransferencia AND estado='PENDIENTE')
+      THROW 52001, 'Transferencia no válida para confirmar.', 1;
+
+    DECLARE @almacenOrigenId INT, @almacenDestinoId INT;
+    SELECT @almacenOrigenId=almacenOrigenId, @almacenDestinoId=almacenDestinoId
+    FROM Inv_inv_transferencias WHERE idTransferencia=@idTransferencia;
+
+    -- Cargar items de transferencia a TVP (Pendiente por confirmar estructura real)
+    DECLARE @items Inv_tvp_mov_items;
+    INSERT INTO @items(productoId, cantidad, propietarioTipo, proveedorId, unit_cost, observacion)
+    SELECT productoId, cantidad, propietarioTipo, proveedorId, unit_cost, NULL
+    FROM Inv_inv_transferencia_detalle
+    WHERE idTransferencia=@idTransferencia;
+
+    DECLARE @idMovSalida INT, @idMovEntrada INT, @ok BIT, @codigo INT, @mensaje NVARCHAR(4000);
+
+    -- Movimiento salida origen
+    EXEC Inv_sp_inv_movimiento_registrar
+      @tipoMovimiento='TRANSFERENCIA_SALIDA',
+      @almacenOrigenId=@almacenOrigenId,
+      @almacenDestinoId=NULL,
+      @referenciaTipo='TRANSFERENCIA',
+      @referenciaId=@idTransferencia,
+      @referenciaTexto=NULL,
+      @items=@items,
+      @idMovimiento=@idMovSalida OUTPUT,
+      @ok=@ok OUTPUT,
+      @codigo=@codigo OUTPUT,
+      @mensaje=@mensaje OUTPUT;
+
+    -- Movimiento entrada destino
+    EXEC Inv_sp_inv_movimiento_registrar
+      @tipoMovimiento='TRANSFERENCIA_ENTRADA',
+      @almacenOrigenId=NULL,
+      @almacenDestinoId=@almacenDestinoId,
+      @referenciaTipo='TRANSFERENCIA',
+      @referenciaId=@idTransferencia,
+      @referenciaTexto=NULL,
+      @items=@items,
+      @idMovimiento=@idMovEntrada OUTPUT,
+      @ok=@ok OUTPUT,
+      @codigo=@codigo OUTPUT,
+      @mensaje=@mensaje OUTPUT;
+
+    UPDATE Inv_inv_transferencias
+    SET estado='CONFIRMADA',
+        idMovimientoSalida=@idMovSalida,
+        idMovimientoEntrada=@idMovEntrada,
+        fechaConfirmacion=SYSUTCDATETIME()
+    WHERE idTransferencia=@idTransferencia;
+
+    COMMIT;
+  END TRY
+  BEGIN CATCH
+    IF XACT_STATE()<>0 ROLLBACK;
+    THROW;
+  END CATCH
+END
+
+5.6 SP aplicar conteo físico (ajuste por diferencias)
+
+Regla UX: el usuario captura; el sistema calcula diferencias; supervisor aprueba; luego se aplica.
+
+CREATE OR ALTER PROCEDURE Inv_sp_inv_conteo_aplicar
+  @idConteo INT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET XACT_ABORT ON;
+
+  BEGIN TRY
+    BEGIN TRAN;
+
+    -- Validar conteo APROBADO
+    IF NOT EXISTS(SELECT 1 FROM Inv_inv_conteos WHERE idConteo=@idConteo AND estado='APROBADO')
+      THROW 53001, 'Conteo no aprobado.', 1;
+
+    DECLARE @almacenId INT;
+    SELECT @almacenId=almacenId FROM Inv_inv_conteos WHERE idConteo=@idConteo;
+
+    -- Crear TVP con diferencias (físico - snapshot)
+    DECLARE @items Inv_tvp_mov_items;
+
+    INSERT INTO @items(productoId, cantidad, propietarioTipo, proveedorId, unit_cost, observacion)
+    SELECT
+      d.productoId,
+      (d.cantidadFisica - d.cantidadSnapshot) AS cantidad,  -- ajuste directo
+      d.propietarioTipo,
+      d.proveedorId,
+      d.unit_cost,
+      d.motivo
+    FROM Inv_inv_conteo_detalle d
+    WHERE d.idConteo=@idConteo
+      AND (d.cantidadFisica - d.cantidadSnapshot) <> 0;
+
+    DECLARE @idMovAjuste INT, @ok BIT, @codigo INT, @mensaje NVARCHAR(4000);
+
+    EXEC Inv_sp_inv_movimiento_registrar
+      @tipoMovimiento='AJUSTE_CONTEO',
+      @almacenOrigenId=@almacenId,
+      @almacenDestinoId=NULL,
+      @referenciaTipo='CONTEO',
+      @referenciaId=@idConteo,
+      @referenciaTexto=NULL,
+      @items=@items,
+      @idMovimiento=@idMovAjuste OUTPUT,
+      @ok=@ok OUTPUT,
+      @codigo=@codigo OUTPUT,
+      @mensaje=@mensaje OUTPUT;
+
+    UPDATE Inv_inv_conteos
+    SET estado='APLICADO',
+        idMovimientoAjuste=@idMovAjuste,
+        fechaAplicacion=SYSUTCDATETIME()
+    WHERE idConteo=@idConteo;
+
+    COMMIT;
+  END TRY
+  BEGIN CATCH
+    IF XACT_STATE()<>0 ROLLBACK;
+    THROW;
+  END CATCH
+END
+
+SECCIÓN 6 — Módulos y funcionamiento (paso a paso)
+
+Formato estándar por módulo: objetivo → pantallas → flujo usuario → validaciones → SP → auditoría.
+
+6.1 Catálogos
+
+Objetivo: tener datos base consistentes.
+
+Pantallas:
+
+Productos
+
+Proveedores
+
+Clientes
+
+Tipos OT (reglas)
+
+Motivos de movimiento
+
+Almacenes (si no va en módulo separado)
+
+Reglas:
+
+Producto consumible: se usa por cantidad.
+
+Producto serializado: se controla en Activos, no en consumo por cantidad.
+
+Costo del producto existe, pero el costo “real” histórico lo congela unit_cost en movimiento detalle.
+
+Auditoría:
+
+evento catalogo_actualizado con entidad y cambios mínimos.
+
+Pendiente por confirmar:
+
+si hay códigos de barra/QR y cómo se almacenan.
+
+6.2 Almacenes
+
+Tipos: CENTRAL, REGIONAL, PROYECTO, TECNICO
+
+Reglas:
+
+Almacén TECNICO pertenece a un técnico.
+
+Almacén PROYECTO pertenece a un proyecto.
+
+Transferencias entre almacenes requieren confirmación de destino para impactar stock.
+
+Flujo simple (usuario):
+
+Crear almacén (tipo + padre + responsable).
+
+Activar/inactivar.
+
+Asignar técnico/proyecto si aplica.
+
+6.3 Inventario consumible (kardex)
+
+Tipos de movimiento (lista cerrada recomendada):
+
+ENTRADA_COMPRA
+
+ENTRADA_CONSIGNACION
+
+TRANSFERENCIA_SALIDA
+
+TRANSFERENCIA_ENTRADA
+
+CONSUMO_OT
+
+DEVOLUCION_OT
+
+DEVOLUCION_PROVEEDOR
+
+MERMA_DANO
+
+AJUSTE_CONTEO
+
+AJUSTE_MANUAL (solo Admin/Supervisor + aprobación)
+
+UX:
+
+Una pantalla principal de “Inventario” con:
+
+stock por almacén (paginado server, filtros)
+
+botón principal: “Registrar movimiento”
+
+tabs simples: Stock | Kardex | Movimientos
+
+Validaciones:
+
+no stock negativo (por defecto)
+
+propietario PROVEEDOR requiere proveedorId
+
+movimientos deben guardar referencia cuando aplique (OT, transferencia, conteo)
+
+SP:
+
+Inv_sp_inv_movimiento_registrar (central)
+
+Inv_sp_inv_stock_obtener
+
+Inv_sp_inv_kardex_obtener
+
+6.4 Transferencias
+
+Flujo usuario (simple):
+
+Origen crea transferencia (PENDIENTE) con items.
+
+Destino confirma recepción (CONFIRMADA).
+
+Cancelar solo si está PENDIENTE.
+
+Validaciones:
+
+Al confirmar se valida stock en origen (en SP, atómico).
+
+Si falta stock, no confirma.
+
+SP:
+
+Inv_sp_inv_transferencia_crear (pendiente por implementar / confirmar)
+
+Inv_sp_inv_transferencia_confirmar (modelo arriba)
+
+Inv_sp_inv_transferencia_cancelar (pendiente)
+
+Auditoría:
+
+transferencia_creada, transferencia_confirmada, transferencia_cancelada
+
+6.5 Consignación
+
+Regla base:
+
+La consignación es stock separado por:
+
+propietarioTipo='PROVEEDOR' + proveedorId
+
+Flujos:
+
+Entrada consignación: crea movimiento ENTRADA_CONSIGNACION en almacén.
+
+Consumo consignado en OT: CONSUMO_OT con propietario PROVEEDOR.
+
+Devolución a proveedor: DEVOLUCION_PROVEEDOR.
+
+Liquidación mensual: sumar consumos - devoluciones por proveedor y producto, usando unit_cost congelado.
+
+Pendiente por confirmar:
+
+si existe “precio proveedor” distinto al costo producto.
+
+si la consignación se liquida por costo o por tarifa acordada.
+
+6.6 OT (Órdenes de trabajo)
+
+Estados sugeridos:
+
+REGISTRADA
+
+ASIGNADA
+
+EN_PROCESO
+
+EN_ESPERA
+
+FINALIZADA
+
+CANCELADA
+
+Campos:
+
+cliente, dirección, tipoOT, prioridad
+
+técnico asignado
+
+fechas (asignación, inicio, cierre)
+
+checklist
+
+evidencias (fotos)
+
+firma (si aplica)
+
+consumos (materiales) → vínculo a movimientos
+
+activos instalados/retirados/reemplazo (si aplica)
+
+Reglas de cierre por tipo OT:
+
+instalación: firma + evidencia + equipo instalado si aplica
+
+mantenimiento: checklist mínimo
+
+reparación: evidencia problema/solución
+
+Consumo:
+
+técnico consume desde su almacén técnico.
+
+consumo siempre ejecuta Inv_sp_ot_consumir_material (SP transaccional).
+
+Auditoría:
+
+ot_creada, ot_asignada, ot_iniciada, ot_material_consumido, ot_cerrada
+
+Pendiente por confirmar:
+
+quién cierra OT (técnico solicita, supervisor cierra; o auto-cierre si cumple).
+
+6.7 Proyectos
+
+Campos:
+
+nombre, descripción, estado, fechas, responsable
+
+opcional: almacén proyecto
+
+Avance (elegir 1 método):
+
+por tareas completadas ponderadas
+
+o por OTs finalizadas
+
+Costos:
+
+por consumos (sumatoria cantidad * unit_cost)
+
+Pendiente por confirmar:
+
+si el proyecto requiere presupuesto y comparación (plan vs real).
+
+6.8 Activos serializados y equipos en cliente
+
+Estados:
+
+DISPONIBLE
+
+ASIGNADO_A_TECNICO
+
+INSTALADO_EN_CLIENTE
+
+EN_REPARACION
+
+DANIADO
+
+PERDIDO
+
+BAJA
+
+Flujos:
+
+Alta activo (ingreso)
+
+Asignar a técnico
+
+Devolver a almacén
+
+Instalar en cliente desde OT
+
+Retirar de cliente
+
+Reemplazo (saliente + entrante obligatorios)
+
+Reparación (enviar/recibir/resultado)
+
+Baja (requiere aprobación)
+
+UX simple:
+
+buscador de serial (exacto primero, prefijo después)
+
+tarjeta de resultado con estado + ubicación + último movimiento
+
+historial tipo timeline
+
+Pendiente por confirmar:
+
+si existe MAC/IMEI como clave alternativa al serial.
+
+6.9 Conteo físico
+
+Estados:
+
+ABIERTA → CERRADA → APROBADA → APLICADA
+
+Flujo usuario:
+
+Iniciar conteo (snapshot del sistema).
+
+Capturar físico.
+
+Cerrar conteo.
+
+Supervisor aprueba.
+
+Aplicar (genera AJUSTE_CONTEO).
+
+Reglas:
+
+diferencias requieren motivo.
+
+diferencias grandes requieren comentario (umbral pendiente por confirmar).
+
+SP:
+
+Inv_sp_inv_conteo_iniciar
+
+Inv_sp_inv_conteo_capturar
+
+Inv_sp_inv_conteo_aprobar
+
+Inv_sp_inv_conteo_aplicar (modelo arriba)
+
+SECCIÓN 7 — UI/UX por pantallas (simple y operativa)
+7.1 Principios UI
+
+Tablas tipo Excel: filtros, búsqueda, paginación server.
+
+1 acción principal por pantalla.
+
+Estados claros: cargando, vacío, error, éxito.
+
+“Avanzado” colapsado.
+
+Sin azul.
+
+7.2 Pantallas web mínimas
+
+Login
+
+Inicio (KPIs + accesos rápidos)
+
+OT: lista (filtros por estado/técnico) + detalle OT
+
+Inventario: stock + kardex + movimientos
+
+Transferencias: lista + crear + confirmar
+
+Consignación: stock consignado + liquidación
+
+Activos: lista + buscador serial + detalle + historial
+
+Conteo: sesiones + captura + resumen + aplicar
+
+Reportes: filtros + tabla + export
+
+Administración: usuarios, roles, catálogos, parámetros
+
+7.3 Pantallas móvil
+
+Mis OT
+
+Detalle OT (checklist → consumo → evidencia/firma → solicitar cierre)
+
+Mi almacén (camioneta)
+
+Captura conteo (si aplica)
+
+SECCIÓN 8 — Reportes
+8.1 Operativos
+
+Stock por almacén (con propietario)
+
+Stock bajo (umbral por producto o global)
+
+Kardex por producto/almacén/fechas
+
+Transferencias pendientes/confirmadas
+
+Consumo por OT
+
+Consumo por técnico
+
+Devoluciones / merma
+
+Conteos y diferencias
+
+Activos por estado (dañado, reparación, perdido)
+
+8.2 Gerenciales
+
+Consumo por proyecto y costo
+
+Avance proyectos
+
+OTs por estado + tiempos (SLA)
+
+Liquidación consignación por proveedor y período
+
+Regla financiera clave:
+
+Reportes históricos usan unit_cost del movimiento detalle (no costo actual del producto).
+
+SECCIÓN 9 — Performance y patrones prohibidos
+9.1 Objetivos de tiempo (referencia)
+
+stock paginado: <300ms
+
+kardex: <500ms
+
+consumo OT: <600ms
+
+9.2 Patrones prohibidos
+
+LIKE '%texto%' por defecto (rompe índices)
+
+CAST(fecha AS DATE) en WHERE (rompe índices)
+
+N+1 queries (una query por item)
+
+9.3 Índices mínimos
+
+Inv_inv_stock(almacenId, productoId, propietarioTipo, proveedorId)
+
+Inv_inv_movimientos(fechaMovimiento, tipoMovimiento, almacenOrigenId, almacenDestinoId)
+
+Inv_ope_ot(tecnicoId, estado, fechaAsignacion)
+
+Inv_act_activos(serial_normalizado) UNIQUE (o serial UNIQUE)
+
+SECCIÓN 10 — Checklist 0–100 (roadmap ejecutable)
+
+Cada tarea debe tener: Prioridad, Dependencias, DoD.
+Aquí va la versión base (ajustar al repo).
+
+Fase 1 — Seguridad y auditoría
+
+ RBAC: tablas roles/permisos + endpoints (Alta) — Dep: ninguna — DoD: matriz aplicada y probada.
+
+ JWT+Refresh hasheado + revocación (Alta) — DoD: login/refresh/logout OK.
+
+ Auditoría eventos (Alta) — DoD: eventos registran usuario app, entidad y acción.
+
+ SESSION_CONTEXT desde app (Alta) — DoD: SP registra idUsuario real.
+
+Fase 2 — Catálogos y almacenes
+
+ Productos consumibles/serializados (Alta) — DoD: validación esSerializado.
+
+ Proveedores/clientes/tipos OT/motivos (Media) — DoD: CRUD + auditoría.
+
+ Almacenes jerárquicos y tipos (Alta) — DoD: TECNICO y PROYECTO soportados.
+
+Fase 3 — Inventario base (stock/kardex/movimientos)
+
+ Crear TVP Inv_tvp_mov_items (Alta) — DoD: usado por SP.
+
+ Implementar SP central Inv_sp_inv_movimiento_registrar (Alta) — DoD: atomicidad + locks + no negativo.
+
+ Stock paginado (Alta) — DoD: filtros + owner.
+
+ Kardex (Alta) — DoD: timeline por producto/almacén/fechas.
+
+Fase 4 — OT + consumo (móvil)
+
+ CRUD OT + estados (Alta) — DoD: flujo mínimo.
+
+ Reglas tipo OT (Alta) — DoD: cierre bloquea si falta evidencia/firma/equipo.
+
+ SP Inv_sp_ot_consumir_material (Alta) — DoD: consumo atómico.
+
+ UI consumo OT simple (Alta) — DoD: pocos pasos, mensajes claros.
+
+Fase 5 — Transferencias
+
+ Crear transferencia PENDIENTE (Alta) — DoD: no impacta stock.
+
+ Confirmar transferencia (Alta) — DoD: 2 movimientos transaccionales.
+
+ Cancelar transferencia (Media) — DoD: solo PENDIENTE.
+
+Fase 6 — Conteo físico
+
+ Iniciar conteo (snapshot) (Alta) — DoD: snapshot guardado.
+
+ Captura físico (Alta) — DoD: UI rápida.
+
+ Aprobar y aplicar (Alta) — DoD: ajuste por SP + auditoría.
+
+Fase 7 — Consignación
+
+ Entrada consignación (Alta) — DoD: stock propietario PROVEEDOR.
+
+ Consumo consignado OT (Alta) — DoD: link OT.
+
+ Devolución proveedor (Media) — DoD: movimiento controlado.
+
+ Liquidación por período (Alta) — DoD: usa unit_cost congelado.
+
+Fase 8 — Activos
+
+ Alta activos serializados (Alta)
+
+ Asignación/devolución (Alta)
+
+ Instalar/retirar en cliente desde OT (Alta)
+
+ Reemplazo saliente+entrante (Alta)
+
+ Reparación + baja (Alta con aprobación)
+
+Fase 9 — Reportes
+
+ Operativos (Alta)
+
+ Gerenciales (Media/Alta)
+
+ Exportaciones (Media)
+
+Fase 10 — Hardening
+
+ Logs y monitoreo (Media)
+
+ Índices y plan de performance (Alta)
+
+ Backups y políticas (Media)
+
+ UAT + salida (Alta)
+
+SECCIÓN 11 — Pendientes por confirmar
+
+Firma: siempre o por tipo OT.
+
+Evidencia: siempre o por tipo OT.
+
+Lote/vencimiento: por defecto no.
+
+Impresión/ticket: por defecto no.
+
+SLA por tipo OT.
+
+Activos consignados también o no.
+
+Reglas exactas de cierre OT (quién cierra).
+
+Si se permite stock negativo en algún escenario (por defecto NO).
+
+Método único de avance de proyecto (tareas vs OTs).
+
+Si se requiere MAC/IMEI adicional al serial.
+
+SECCIÓN 12 — Pruebas (obligatorio)
+12.1 Funcionales
+
+Consumo OT descuenta stock y crea kardex (empresa y consignación).
+
+Transferencia no impacta hasta confirmar.
+
+Conteo aplica ajustes correctos.
+
+Merma/daño/pérdida registra motivo y afecta stock.
+
+Reemplazo OT exige saliente + entrante.
+
+Activo cambia estado/ubicación según flujo.
+
+Liquidación consignación mensual cuadra (consumo - devoluciones).
+
+12.2 Concurrencia (crítico)
+
+Dos consumos simultáneos del mismo producto/almacén:
+
+nunca debe quedar stock incorrecto ni negativo por carrera.
+
+Confirmación de transferencia simultánea:
+
+solo una confirmación válida.
+
+12.3 Performance
+
+stock paginado < 300ms
+
+kardex < 500ms
+
+consumo OT < 600ms
+
+12.4 Seguridad
+
+Técnico no puede ver/consumir fuera de su almacén.
+
+Gerencia solo lectura.
+
+Ajuste manual y baja activo requieren aprobación.
+
+Instrucción final para Gemini 3 (para que lo entregue como “documento texto” sin confundir)
+
+Debes respetar exactamente esta estructura.
+
+No inventes tablas/campos/endpoints: si no están confirmados, escribir “Pendiente por confirmar”.
+
+El corazón del inventario es Inv_sp_inv_movimiento_registrar (SP central). Todo consumo, transferencia y conteo debe llamarlo.
+
+UX simple: 1 acción principal por pantalla, “avanzado” colapsado, mensajes claros.

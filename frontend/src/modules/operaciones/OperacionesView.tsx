@@ -550,10 +550,39 @@ export const OperacionesView = () => {
                                                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                                         <select className="form-input" style={{ flex: '1 1 200px' }} value={materialForm.productoId} onChange={e => setMaterialForm({ ...materialForm, productoId: e.target.value })}>
                                                             <option value="">-- Seleccionar Item --</option>
-                                                            {productos.map(p => <option key={p.idProducto} value={p.idProducto}>{p.codigo} - {p.nombre} (Stock: {p.stockActual || 0})</option>)}
+                                                            {productos.map(p => <option key={p.idProducto} value={p.idProducto}>{p.codigo} - {p.nombre}</option>)}
                                                         </select>
-                                                        <input type="number" className="form-input" style={{ width: '80px' }} value={materialForm.cantidad} onChange={e => setMaterialForm({ ...materialForm, cantidad: Number(e.target.value) })} />
-                                                        <button className="btn-primary" style={{ flex: '1' }} onClick={handleAddMaterial} disabled={submittingMaterial}>Añadir</button>
+                                                        <input type="number" className="form-input" style={{ width: '80px' }} value={materialForm.cantidad} onChange={e => setMaterialForm({ ...materialForm, cantidad: Number(e.target.value) })} min="1" />
+
+                                                        {(() => {
+                                                            const selectedProd = productos.find(p => p.idProducto.toString() === materialForm.productoId);
+                                                            const stockDisp = selectedProd ? (selectedProd.stockActual || 0) : 0;
+                                                            const hasStock = stockDisp >= materialForm.cantidad;
+
+                                                            return (
+                                                                <>
+                                                                    {materialForm.productoId && (
+                                                                        <div style={{
+                                                                            display: 'flex', alignItems: 'center',
+                                                                            padding: '0 10px', borderRadius: '6px',
+                                                                            background: hasStock ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                                                                            color: hasStock ? '#10b981' : '#ef4444',
+                                                                            fontWeight: 700, fontSize: '0.85rem'
+                                                                        }}>
+                                                                            Stock: {stockDisp}
+                                                                        </div>
+                                                                    )}
+                                                                    <button
+                                                                        className="btn-primary"
+                                                                        style={{ flex: '1', opacity: hasStock ? 1 : 0.5, cursor: hasStock ? 'pointer' : 'not-allowed' }}
+                                                                        onClick={handleAddMaterial}
+                                                                        disabled={submittingMaterial || !hasStock || !materialForm.productoId}
+                                                                    >
+                                                                        {hasStock ? 'Añadir' : 'Sin Stock'}
+                                                                    </button>
+                                                                </>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </div>
                                                 <button className="btn-primary" style={{ width: '100%' }} onClick={() => setStep(2)}>Iniciar Cierre de Orden</button>

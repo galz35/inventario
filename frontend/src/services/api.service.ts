@@ -142,6 +142,10 @@ class InventoryService {
         return api.post(`/inv/catalogos/${type}`, data);
     }
 
+    async getHistoriaProducto(productoId: number, almacenId?: number) {
+        return api.get('/inv/inventario/historia', { params: { productoId, almacenId } });
+    }
+
     async getActivos() {
         return api.get('/inv/activos'); // Assuming this endpoint exists or will exist
     }
@@ -291,8 +295,16 @@ class VehiculosService {
     }
 }
 
+// Assets Service
+class ActivosService {
+    async buscarActivo(serial: string) {
+        return api.get(`/inv/activos/buscar?serial=${serial}`);
+    }
+}
+
 export const authService = new AuthService();
 export const invService = new InventoryService();
 export const opeService = new OperationsService();
 export const planService = new PlanningService();
 export const vehService = new VehiculosService();
+export const activosService = new ActivosService();

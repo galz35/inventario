@@ -5,6 +5,7 @@ import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { generateInventoryPDF } from '../../utils/pdfGenerator';
 import { FileText } from 'lucide-react';
+import { KardexTimeline } from './components/KardexTimeline';
 
 export const InventarioView = () => {
     const [stock, setStock] = useState([]);
@@ -92,7 +93,7 @@ export const InventarioView = () => {
         setSelectedItem(item);
         setLoadingKardex(true);
         try {
-            const res = await invService.getKardex(item.almacenId, item.productoId);
+            const res = await invService.getHistoriaProducto(item.productoId, item.almacenId);
             setKardex(res.data.data || res.data);
         } catch (err) {
             console.error(err);
@@ -359,63 +360,29 @@ export const InventarioView = () => {
                 }
             />
 
+            {/* Modal Historial */}
             <Modal
                 isOpen={!!selectedItem}
                 onClose={() => setSelectedItem(null)}
-                title={`Historial de Movimientos(Kardex)`}
+                title={`Línea de Vida del Producto`}
                 width="800px"
             >
                 {selectedItem && (
                     <div style={{ marginBottom: '20px' }}>
-                        <h4 style={{ color: 'var(--primary)' }}>{selectedItem.productoNombre}</h4>
-                        <p style={{ fontSize: '0.85rem' }}>Almacén: {selectedItem.almacenNombre}</p>
+                        <h4 style={{ color: 'var(--primary)', marginBottom: '5px' }}>{selectedItem.productoNombre}</h4>
+                        <div style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'flex', gap: '15px' }}>
+                            <span>Código: {selectedItem.productoCodigo}</span>
+                            <span>Almacén Actual: {selectedItem.almacenNombre}</span>
+                        </div>
                     </div>
                 )}
 
                 {loadingKardex ? (
-                    <div style={{ padding: '40px', textAlign: 'center' }}>Consultando historial...</div>
-                ) : (
-                    <div style={{ overflowX: 'auto', margin: '0 -24px' }}>
-                        <table style={{ width: '100%', minWidth: '700px', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ textAlign: 'left', background: '#0a0a0a' }}>
-                                    <th style={{ padding: '15px 24px' }}>Fecha</th>
-                                    <th style={{ padding: '15px 12px' }}>Tipo</th>
-                                    <th style={{ padding: '15px 12px', textAlign: 'right' }}>Cant.</th>
-                                    <th style={{ padding: '15px 12px', textAlign: 'right' }}>Stock Nuevo</th>
-                                    <th style={{ padding: '15px 24px' }}>Referencia</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {kardex.length === 0 ? (
-                                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: '40px' }}>No hay movimientos registrados.</td></tr>
-                                ) : kardex.map((mov: any, i: number) => (
-                                    <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                        <td style={{ padding: '15px 24px' }}>
-                                            <div style={{ fontWeight: 600 }}>{new Date(mov.fechaMovimiento).toLocaleDateString()}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#666' }}>{new Date(mov.fechaMovimiento).toLocaleTimeString()}</div>
-                                        </td>
-                                        <td style={{ padding: '15px 12px' }}>
-                                            <span className={`badge ${mov.tipoMovimiento === 'ENTRADA' || mov.tipoMovimiento === 'COMPRA' ? 'badge-success' :
-                                                mov.tipoMovimiento === 'SALIDA' || mov.tipoMovimiento === 'CONSUMO' ? 'badge-danger' :
-                                                    'badge-warning'
-                                                }`}>
-                                                {mov.tipoMovimiento}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '15px 12px', textAlign: 'right', fontWeight: 700, color: mov.cantidad > 0 ? '#10b981' : '#f87171' }}>
-                                            {mov.cantidad > 0 ? `+${mov.cantidad}` : mov.cantidad}
-                                        </td>
-                                        <td style={{ padding: '15px 12px', textAlign: 'right', fontWeight: 700, background: 'rgba(255,255,255,0.01)' }}>{mov.stockNuevo}</td>
-                                        <td style={{ padding: '15px 24px' }}>
-                                            <div style={{ color: '#e2e8f0', fontSize: '0.8rem' }}>{mov.referenciaTexto || 'Sin referencia'}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Por: {mov.usuarioNombre || 'Sistema'}</div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
+                        <div>Cargando historia...</div>
                     </div>
+                ) : (
+                    <KardexTimeline movimientos={kardex} />
                 )}
             </Modal>
 

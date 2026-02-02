@@ -114,4 +114,15 @@ export class InventarioController {
       idUsuario: req.user.userId,
     });
   }
+  @Get('historia')
+  async getHistoria(
+    @Query('productoId') productoId: string,
+    @Query('almacenId') almacenId?: string,
+  ) {
+    if (!productoId) return [];
+    return await invRepo.obtenerHistoriaProducto(
+      parseInt(productoId),
+      almacenId ? parseInt(almacenId) : undefined
+    );
+  }
 }

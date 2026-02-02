@@ -8,7 +8,6 @@ import { AlmacenesView } from './modules/catalogos/AlmacenesView';
 import { ConsignacionView } from './modules/consignacion/ConsignacionView';
 import { AuditoriaView } from './modules/auditoria/AuditoriaView';
 import { ReportesView } from './modules/reportes/ReportesView';
-import { ActivosView } from './modules/activos/ActivosView';
 import { TransferenciasView } from './modules/inventario/TransferenciasView';
 
 import { SystemUsersView } from './modules/usuarios/SystemUsersView';
@@ -20,6 +19,7 @@ import {
   UserCircle, FileText, UserCog, Users, Car
 } from 'lucide-react';
 import { VehiculosView } from './modules/vehiculos/VehiculosView';
+import { ActivosView } from './modules/activos/ActivosView';
 
 const SidebarSection = ({ label, show }: { label: string, show: boolean }) => (
   show ? <div style={{

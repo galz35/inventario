@@ -168,6 +168,21 @@ export async function cerrarOT(
   });
 }
 
+export async function validarStockDisponible(almacenId: number, productoId: number, cantidadRequerida: number) {
+  const res = await ejecutarQuery(`
+      SELECT cantidad FROM Inv_inv_stock 
+      WHERE almacenId = @alm AND productoId = @prod
+  `, {
+    alm: { valor: almacenId, tipo: Int },
+    prod: { valor: productoId, tipo: Int }
+  });
+
+  const disponible = res[0]?.cantidad || 0;
+  if (disponible < cantidadRequerida) {
+    throw new Error(`Stock insuficiente. Disponible: ${disponible}, Requerido: ${cantidadRequerida}`);
+  }
+}
+
 export async function registrarConsumoOT(
   idOT: number,
   item: {
@@ -176,18 +191,32 @@ export async function registrarConsumoOT(
     idUsuario: number;
   },
 ) {
+  // 1. Obtener Almacén Técnico del usuario (Asumiendo que el usuario es un técnico con almacén asignado)
+  // OJO: En un sistema ideal, el almacénID vendría del usuario. 
+  // Por simplicidad para la demo, buscaremos el almacén tipo 'TECNICO' asociado al usuario,
+  // O usaremos un parámetro, pero aquí lo buscaremos dinámicamente.
+
+  const usuarioRes = await ejecutarQuery(`SELECT idAlmacenTecnico FROM Inv_seg_usuarios WHERE idUsuario = @u`, { u: { valor: item.idUsuario, tipo: Int } });
+  const almacenOrigenId = usuarioRes[0]?.idAlmacenTecnico;
+
+  if (almacenOrigenId) {
+    // 2. Validar Stock antes de iniciar transacción
+    await validarStockDisponible(almacenOrigenId, item.productoId, item.cantidad);
+  }
+
   return await conTransaccion(async (tx) => {
     const resMov = await ejecutarSP<{ idMovimiento: number }>(
       'Inv_sp_inv_movimiento_crear_header',
       {
         tipoMovimiento: { valor: 'CONSUMO_OT', tipo: NVarChar },
         idUsuarioResponsable: { valor: item.idUsuario, tipo: Int },
-        almacenOrigenId: { valor: null, tipo: Int },
+        almacenOrigenId: { valor: almacenOrigenId || null, tipo: Int }, // Usar el almacén encontrado
         notas: { valor: `Consumo OT #${idOT}`, tipo: NVarChar },
         referenciaTexto: { valor: `OT-${idOT}`, tipo: NVarChar },
       },
       tx,
     );
+
 
     const idMov = resMov[0]?.idMovimiento;
 
