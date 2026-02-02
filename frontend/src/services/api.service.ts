@@ -21,7 +21,14 @@ api.interceptors.request.use(config => {
         config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
-}, error => Promise.reject(error));
+}, error => {
+    if (error.response && error.response.status === 401) {
+        localStorage.removeItem('inv_token');
+        localStorage.removeItem('inv_user');
+        window.location.href = '/';
+    }
+    return Promise.reject(error);
+});
 
 // Auth Service
 class AuthService {
