@@ -6,7 +6,6 @@ import { Roles } from '../../auth/roles.decorator';
 
 @Controller('inv/catalogos')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'AUDITOR', 'SUPERVISOR', 'TECNICO', 'DESPACHO', 'BODEGA')
 export class CatalogosController {
   @Get('categorias')
   async getCategorias() {
