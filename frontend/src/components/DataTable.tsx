@@ -23,7 +23,8 @@ export const DataTable = ({ columns, data, loading, title, description, actions,
     const [pageSize] = useState(10);
 
     const filteredData = useMemo(() => {
-        const filtered = data.filter(row => {
+        const safeData = Array.isArray(data) ? data : [];
+        const filtered = safeData.filter(row => {
             return Object.entries(filters).every(([key, value]) => {
                 if (!value) return true;
                 const cellValue = String(row[key] || '').toLowerCase();
