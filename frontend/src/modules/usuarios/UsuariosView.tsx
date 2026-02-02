@@ -43,7 +43,7 @@ export const UsuariosView = () => {
             setStats({
                 total: data.length,
                 activos: data.filter((u: any) => u.laborActual).length,
-                tecnicos: data.filter((u: any) => u.rolNombre?.toUpperCase().includes('TECNICO')).length
+                tecnicos: data.filter((u: any) => u.rolNombre && u.rolNombre.toUpperCase().includes('TECNICO')).length
             });
         } catch (e) {
             console.error(e);
