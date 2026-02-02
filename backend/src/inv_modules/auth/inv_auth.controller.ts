@@ -9,15 +9,39 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as authRepo from './inv_auth.repo';
 
+import * as bcrypt from 'bcrypt';
+import * as globalAuthRepo from '../../../auth/auth.repo';
+
 @Controller('inv/auth')
 export class InvAuthController {
-  constructor(private jwtService: JwtService) {}
+  constructor(private jwtService: JwtService) { }
 
   @Post('login')
   async login(@Body() body: { correo: string; password: string }) {
-    const usuario = await authRepo.login(body.correo, body.password);
-    if (!usuario) {
+    // 1. Validar usuario existente y activo
+    const user = await globalAuthRepo.obtenerUsuarioPorIdentificador(body.correo);
+    if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    // 2. Obtener credenciales (hash)
+    const creds = await globalAuthRepo.obtenerCredenciales(user.idUsuario);
+    if (!creds || !creds.passwordHash) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    // 3. Comparar contraseña (Input vs Hash)
+    const isMatch = await bcrypt.compare(body.password, creds.passwordHash);
+    if (!isMatch) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    // 4. Invocar SP de Login (Pasando el HASH almacenado, no el texto plano)
+    // El SP hace: WHERE password = @password. Al pasar el mismo hash que está en BD, coincide.
+    const usuario = await authRepo.login(body.correo, creds.passwordHash);
+
+    if (!usuario) {
+      throw new UnauthorizedException('Credenciales inválidas o usuario inactivo');
     }
 
     // Estructura de payload compatible con JwtStrategy
