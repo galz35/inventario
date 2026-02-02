@@ -10,7 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as authRepo from './inv_auth.repo';
 
 import * as bcrypt from 'bcrypt';
-import * as globalAuthRepo from '../../../auth/auth.repo';
+import * as globalAuthRepo from '../../auth/auth.repo';
 
 @Controller('inv/auth')
 export class InvAuthController {
