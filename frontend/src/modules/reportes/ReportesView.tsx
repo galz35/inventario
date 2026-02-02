@@ -17,7 +17,8 @@ export const ReportesView = () => {
 
             const resConsumo = await invService.getReporteConsumoProyecto();
             setConsumoData(resConsumo.data.data || resConsumo.data || []);
-        } catch (err) {
+        } catch (err: any) {
+            if (err.response && (err.response.status === 401 || err.response.status === 403)) return;
             console.error(err);
         } finally {
             setLoading(false);
