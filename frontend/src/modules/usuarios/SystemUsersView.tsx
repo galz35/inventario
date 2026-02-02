@@ -3,7 +3,7 @@ import { authService, invService, opeService } from '../../services/api.service'
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { alertSuccess, alertError } from '../../services/alert.service';
-import { Activity, Plus, Shield, History, PenTool, Search } from 'lucide-react';
+import { Plus, Shield, History, PenTool, Search } from 'lucide-react';
 
 export const SystemUsersView = () => {
     // State
@@ -115,42 +115,27 @@ export const SystemUsersView = () => {
     // Columns Definition
     const columns = [
         {
-            key: 'nombre',
-            label: 'Nombre / Cargo',
-            render: (val: string, row: any) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{
-                        width: '36px', height: '36px',
-                        borderRadius: '10px',
-                        background: row.activo ? 'var(--primary)' : '#334155',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#fff', fontWeight: 'bold'
-                    }}>
-                        {val ? val.charAt(0).toUpperCase() : '?'}
-                    </div>
-                    <div>
-                        <div style={{ fontWeight: 600, color: row.activo ? '#e2e8f0' : '#94a3b8' }}>{val}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                            {row.rolNombre || 'Sin Rol'} • {row.carnet || 'N/A'}
-                        </div>
-                    </div>
-                </div>
-            )
+            key: 'idUsuario',
+            label: 'ID',
+            render: (val: any) => <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>#{val}</span>
         },
-        { key: 'correo', label: 'Contacto' },
         {
-            key: 'laborActual',
-            label: 'Estado Actual',
-            render: (val: string) => val ? (
-                <span className="badge badge-accent">
-                    <Activity size={12} style={{ marginRight: 4 }} /> En OT #{val}
-                </span>
-            ) : (
-                <span className="badge" style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>
-                    Disponible
+            key: 'nombre',
+            label: 'Nombre Completo',
+            render: (val: string, row: any) => (
+                <div style={{ fontWeight: 600, color: row.activo ? '#e2e8f0' : '#94a3b8' }}>{val}</div>
+            )
+        },
+        {
+            key: 'rolNombre',
+            label: 'Perfil / Rol',
+            render: (val: string) => (
+                <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                    {val || 'Usuario'}
                 </span>
             )
         },
+        { key: 'correo', label: 'Correo Electrónico' },
         {
             key: 'actions',
             label: 'Opciones',
@@ -161,18 +146,18 @@ export const SystemUsersView = () => {
                         <button
                             className="btn-secondary"
                             onClick={() => handleOpenProfile(row)}
-                            title="Ver Ficha Técnica"
-                            style={{ padding: '6px' }}
+                            title="Ver Perfil Detallado"
+                            style={{ padding: '8px', borderRadius: '10px' }}
                         >
                             <Search size={16} />
                         </button>
                         <button
                             className={row.activo ? 'btn-danger' : 'btn-primary'}
                             onClick={() => handleToggleStatus(row)}
-                            title={row.activo ? 'Desactivar Cuenta' : 'Activar Cuenta'}
-                            style={{ padding: '6px' }}
+                            title={row.activo ? 'Desactivar Usuario' : 'Activar Usuario'}
+                            style={{ padding: '8px', borderRadius: '10px' }}
                         >
-                            <Shield size={16} color={row.activo ? '#fff' : '#fff'} />
+                            <Shield size={16} />
                         </button>
                     </div>
                 );
