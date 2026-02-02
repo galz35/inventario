@@ -19,11 +19,12 @@ import * as path from 'path';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class OperacionesController {
   @Get('ot')
-  async listarOTs(@Request() req: any, @Query('estado') estado?: string) {
+  async listarOTs(@Request() req: any, @Query('estado') estado?: string, @Query('idCliente') idCliente?: string) {
     // If technical role, filter by self
     const isTecnico = req.user.role === 'TECNICO';
     return await opeRepo.listarOTsQuery(
       isTecnico ? req.user.userId : undefined,
+      idCliente ? parseInt(idCliente) : undefined
     );
   }
 

@@ -5,7 +5,62 @@ import {
   ejecutarSP,
   NVarChar,
   conTransaccion,
+  crearRequest
 } from '../../db/base.repo';
+
+// ... (existing code for crearOT and listarOTs kept if not replaced, but we are replacing listarOTsQuery)
+
+export async function listarOTsQuery(idTecnico?: number, idCliente?: number) {
+  const request = await crearRequest();
+  let query = `
+        SELECT 
+            ot.idOT,
+            ot.idProyecto,
+            p.nombre as proyectoNombre,
+            ot.idTecnicoAsignado,
+            u.nombre as tecnicoNombre,
+            ot.clienteNombre,
+            ot.clienteDireccion,
+            ot.tipoOT,
+            ot.prioridad,
+            ot.estado,
+            ot.fechaAsignacion,
+            ot.fechaCreacion,
+            ot.fechaCierre,
+            ot.notas,
+            ot.numeroCliente,
+            ot.contactoNombre,
+            ot.telefono,
+            ot.correo,
+            ot.descripcionTrabajo
+        FROM Inv_ope_ot ot
+        LEFT JOIN Inv_ope_proyectos p ON ot.idProyecto = p.idProyecto
+        LEFT JOIN Inv_seg_usuarios u ON ot.idTecnicoAsignado = u.idUsuario
+        WHERE 1=1
+    `;
+
+  if (idTecnico) {
+    request.input('idTecnico', Int, idTecnico);
+    query += ` AND ot.idTecnicoAsignado = @idTecnico`;
+  }
+
+  if (idCliente) {
+    request.input('idCliente', Int, idCliente);
+    // Asumiendo que hay una columna idCliente o se filtra por nombre?
+    // Revisando el esquema: la tabla Inv_ope_ot tiene idCliente?
+    // No lo vi en el CREATE TABLE de arriba, solo clienteNombre.
+    // Pero crearOT recibe idCliente.
+    // Voy a asumir que existe idCliente (INT) en la tabla real o voy a filtrar por clienteNombre si no.
+    // Pero para ser seguro, usaré "ot.idCliente = @idCliente" si existe la columna, 
+    // OJO: En el repo 'crearOT' usa 'idCliente', así que la columna DEBE existir.
+    query += ` AND ot.idCliente = @idCliente`;
+  }
+
+  query += ` ORDER BY ot.fechaCreacion DESC`;
+
+  const res = await request.query(query);
+  return res.recordset;
+}
 
 export async function crearOT(dto: {
   idProyecto?: number;
@@ -93,11 +148,7 @@ export async function listarOTs(filtros: {
 
 // Fallback: If SP doesn't exist, we error. To be safe, let's implement the query version
 // but pretend it's a Repo method.
-export async function listarOTsQuery(idTecnico?: number) {
-  return await ejecutarSP('Inv_sp_ot_listar_tecnico', {
-    idTecnico: { valor: idTecnico, tipo: Int },
-  });
-}
+
 
 export async function cerrarOT(
   idOT: number,

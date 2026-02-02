@@ -5,6 +5,8 @@ import {
   UnauthorizedException,
   Get,
   Query,
+  Patch,
+  Param,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as authRepo from './inv_auth.repo';
@@ -87,5 +89,34 @@ export class InvAuthController {
       accion,
     );
     return { tienePermiso };
+  }
+
+  // === GESTIÓN DE USUARIOS ===
+
+  @Get('usuarios')
+  async listarUsuarios() {
+    const usuarios = await authRepo.listarUsuarios();
+    return { data: usuarios };
+  }
+
+  @Patch('usuarios/:id/estado')
+  async toggleEstado(@Param('id') id: string, @Body() body: { activo: boolean }) {
+    await authRepo.toggleEstadoUsuario(parseInt(id), body.activo);
+    return { msg: 'Estado actualizado' };
+  }
+
+  @Post('usuarios')
+  async crearUsuario(@Body() body: any) {
+    // 1. Hash Password
+    const salt = await bcrypt.genSalt();
+    const hash = await bcrypt.hash(body.password, salt);
+
+    // 2. Save
+    try {
+      await authRepo.crearUsuario({ ...body, password: hash });
+      return { msg: 'Usuario creado correctamente' };
+    } catch (e) {
+      throw new UnauthorizedException('Error al crear usuario. Verifique si el correo o carnet ya existen.');
+    }
   }
 }

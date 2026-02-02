@@ -30,6 +30,18 @@ class AuthService {
         return api.post('/inv/auth/login', { correo, password });
     }
 
+    async getUsers() {
+        return api.get('/inv/auth/usuarios');
+    }
+
+    async toggleUserStatus(id: number, activo: boolean) {
+        return api.patch(`/inv/auth/usuarios/${id}/estado`, { activo });
+    }
+
+    async createUser(data: any) {
+        return api.post('/inv/auth/usuarios', data);
+    }
+
     logout() {
         localStorage.removeItem('inv_token');
         localStorage.removeItem('inv_user');
@@ -171,8 +183,8 @@ class InventoryService {
 
 // Operations Service (OTs)
 class OperationsService {
-    async listarOTs(filters?: any) {
-        return api.get('/inv/operaciones/ot', { params: filters });
+    async listarOTs(params?: any) {
+        return api.get('/inv/operaciones/ot', { params });
     }
 
     async crearOT(data: any) {

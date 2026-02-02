@@ -11,12 +11,14 @@ import { ReportesView } from './modules/reportes/ReportesView';
 import { ActivosView } from './modules/activos/ActivosView';
 import { TransferenciasView } from './modules/inventario/TransferenciasView';
 
+import { UsuariosView } from './modules/usuarios/UsuariosView';
+
 
 import { DashboardView } from './modules/dashboard/DashboardView';
 import {
   LayoutDashboard, Box, Truck, Calendar, ClipboardList, PenTool,
   Settings, Building2, FolderOpen, LogOut, ChevronLeft, ChevronRight,
-  UserCircle, FileText
+  UserCircle, FileText, UserCog
 } from 'lucide-react';
 
 const SidebarSection = ({ label, show }: { label: string, show: boolean }) => (
@@ -160,6 +162,7 @@ export default function App() {
           {isAdmin && (
             <>
               <SidebarSection label="Sistema" show={isSidebarOpen || !isMobile} />
+              <SidebarLink active={view === 'usuarios'} icon={UserCog} label="Gestión Usuarios" onClick={() => setView('usuarios')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'activos'} icon={Settings} label="Activos y Herramientas" onClick={() => setView('activos')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'almacenes'} icon={Building2} label="Almacenes" onClick={() => setView('almacenes')} showLabel={isSidebarOpen || !isMobile} />
               <SidebarLink active={view === 'catalogos'} icon={FolderOpen} label="Catálogos" onClick={() => setView('catalogos')} showLabel={isSidebarOpen || !isMobile} />
@@ -230,6 +233,7 @@ export default function App() {
           {view === 'auditoria' && <AuditoriaView />}
           {view === 'reportes' && <ReportesView />}
           {view === 'activos' && <ActivosView />}
+          {view === 'usuarios' && <UsuariosView />}
         </div>
       </main>
     </div>

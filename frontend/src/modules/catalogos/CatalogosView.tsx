@@ -1,15 +1,20 @@
 import { useState, useEffect } from 'react';
-import { invService } from '../../services/api.service';
+import { invService, opeService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { alertSuccess, alertError } from '../../services/alert.service';
 
 export const CatalogosView = () => {
-    const [activeTab, setActiveTab] = useState<'categorias' | 'proveedores' | 'productos'>('productos');
+    const [activeTab, setActiveTab] = useState<'categorias' | 'proveedores' | 'productos' | 'clientes'>('productos');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [processing, setProcessing] = useState(false);
+
+    // Client History
+    const [historyModalOpen, setHistoryModalOpen] = useState(false);
+    const [clientHistory, setClientHistory] = useState<any[]>([]);
+    const [selectedClient, setSelectedClient] = useState<any>(null);
 
     // Form States
     const [formData, setFormData] = useState<any>({ nombre: '', codigo: '', esSerializado: false, costo: 0, idCategoria: '' });
@@ -18,7 +23,7 @@ export const CatalogosView = () => {
         setLoading(true);
         try {
             const res = await invService.getCatalog(activeTab);
-            setData(res.data.data || res.data);
+            setData(res.data.data || res.data || []);
         } catch (err) {
             console.error(err);
         } finally {
@@ -29,6 +34,22 @@ export const CatalogosView = () => {
     useEffect(() => {
         fetchData();
     }, [activeTab]);
+
+    const handleViewHistory = async (client: any) => {
+        setSelectedClient(client);
+        setHistoryModalOpen(true);
+        setLoading(true);
+        try {
+            // Reusing the OTs endpoint filtering by client
+            const res = await opeService.listarOTs({ idCliente: client.idCliente });
+            setClientHistory(res.data.data || res.data || []);
+        } catch (e) {
+            console.error(e);
+            alertError('Error al cargar historial');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -71,7 +92,16 @@ export const CatalogosView = () => {
         { key: 'nit', label: 'NIT' },
         { key: 'contacto', label: 'Contacto' },
         { key: 'correo', label: 'Correo' },
-        { key: 'telefono', label: 'Teléfono' }
+        { key: 'telefono', label: 'Teléfono' },
+        {
+            key: 'acciones',
+            label: 'Stock',
+            render: (_: any, row: any) => (
+                <a href="#consignacion" style={{ color: 'var(--primary)', textDecoration: 'underline', fontSize: '0.85rem' }}>
+                    Ver Consignaciones
+                </a>
+            )
+        }
     ];
 
     const categoryColumns = [
@@ -79,9 +109,26 @@ export const CatalogosView = () => {
         { key: 'descripcion', label: 'Descripción' }
     ];
 
+    const clientColumns = [
+        { key: 'nombre', label: 'Cliente' },
+        { key: 'contactoNombre', label: 'Contacto' },
+        { key: 'telefono', label: 'Teléfono' },
+        { key: 'direccion', label: 'Dirección' },
+        {
+            key: 'acciones',
+            label: 'Historial',
+            render: (_: any, row: any) => (
+                <button className="btn-secondary" style={{ fontSize: '0.8rem', padding: '4px 10px' }} onClick={() => handleViewHistory(row)}>
+                    Ver Casos
+                </button>
+            )
+        }
+    ];
+
     const getColumns = () => {
         if (activeTab === 'productos') return productColumns;
         if (activeTab === 'proveedores') return providerColumns;
+        if (activeTab === 'clientes') return clientColumns;
         return categoryColumns;
     };
 
@@ -99,6 +146,7 @@ export const CatalogosView = () => {
                 scrollbarWidth: 'none' // Hide scrollbar for cleaner look
             }} className="no-scrollbar">
                 <TabButton active={activeTab === 'productos'} onClick={() => setActiveTab('productos')}>Productos</TabButton>
+                <TabButton active={activeTab === 'clientes'} onClick={() => setActiveTab('clientes')}>Clientes</TabButton>
                 <TabButton active={activeTab === 'proveedores'} onClick={() => setActiveTab('proveedores')}>Proveedores</TabButton>
                 <TabButton active={activeTab === 'categorias'} onClick={() => setActiveTab('categorias')}>Categorías</TabButton>
             </div>
@@ -123,7 +171,7 @@ export const CatalogosView = () => {
                 </>}
             >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <FormGroup label="Nombre">
+                    <FormGroup label="Nombre / Razón Social">
                         <input type="text" className="form-input" value={formData.nombre} onChange={e => setFormData({ ...formData, nombre: e.target.value })} />
                     </FormGroup>
 
@@ -145,6 +193,48 @@ export const CatalogosView = () => {
                             </div>
                         </>
                     )}
+
+                    {(activeTab === 'proveedores' || activeTab === 'clientes') && (
+                        <>
+                            <FormGroup label="Persona de Contacto">
+                                <input type="text" className="form-input" value={formData.contactoNombre || formData.contacto} onChange={e => setFormData({ ...formData, contactoNombre: e.target.value, contacto: e.target.value })} />
+                            </FormGroup>
+                            <div style={{ display: 'flex', gap: '15px' }}>
+                                <FormGroup label="Teléfono" style={{ flex: 1 }}>
+                                    <input type="text" className="form-input" value={formData.telefono} onChange={e => setFormData({ ...formData, telefono: e.target.value })} />
+                                </FormGroup>
+                                <FormGroup label="Correo" style={{ flex: 1 }}>
+                                    <input type="text" className="form-input" value={formData.correo} onChange={e => setFormData({ ...formData, correo: e.target.value })} />
+                                </FormGroup>
+                            </div>
+                            <FormGroup label="Dirección / NIT">
+                                <input type="text" className="form-input" value={formData.direccion || formData.nit} onChange={e => setFormData({ ...formData, direccion: e.target.value, nit: e.target.value })} />
+                            </FormGroup>
+                        </>
+                    )}
+                </div>
+            </Modal>
+
+            <Modal
+                isOpen={historyModalOpen}
+                onClose={() => setHistoryModalOpen(false)}
+                title={`Historial de Servicios: ${selectedClient?.nombre || ''}`}
+                width="900px"
+            >
+                <div>
+                    <DataTable
+                        title=""
+                        columns={[
+                            { key: 'fechaCreacion', label: 'Fecha', render: (d: string) => new Date(d).toLocaleDateString() },
+                            { key: 'idOT', label: 'OT #', render: (v: any) => <b>#{v}</b> },
+                            { key: 'tipoOT', label: 'Tipo' },
+                            { key: 'tecnicoNombre', label: 'Técnico Atendió', render: (v: string) => v || 'Sin asignar' },
+                            { key: 'estado', label: 'Estado', render: (v: string) => <span className="badge">{v}</span> },
+                            { key: 'prioridad', label: 'Prior.', render: (v: string) => <span style={{ color: v === 'CRITICA' ? '#ef4444' : '#fff' }}>{v}</span> }
+                        ]}
+                        data={clientHistory}
+                        description={`Total de ${clientHistory.length} atenciones registradas.`}
+                    />
                 </div>
             </Modal>
 
