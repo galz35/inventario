@@ -95,8 +95,7 @@ export class InvAuthController {
 
   @Get('usuarios')
   async listarUsuarios() {
-    const usuarios = await authRepo.listarUsuarios();
-    return { data: usuarios };
+    return await authRepo.listarUsuarios();
   }
 
   @Patch('usuarios/:id/estado')

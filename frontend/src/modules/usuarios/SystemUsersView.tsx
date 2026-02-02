@@ -34,13 +34,17 @@ export const SystemUsersView = () => {
         setLoading(true);
         try {
             const res = await authService.getUsers();
-            // Defensive: ensure we get an array and filter nulls
-            let data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-            if (Array.isArray(data)) {
-                data = data.filter((u: any) => u !== null && u !== undefined);
-            } else {
-                data = [];
-            }
+            // Data can be in res.data (unwrapped), res.data.data (wrapped by interceptor), 
+            // or even res.data.data.data (Legacy double-wrapping)
+            let rawData = res.data;
+            if (rawData && rawData.data) rawData = rawData.data;
+            if (rawData && rawData.data) rawData = rawData.data; // Double deep for safety
+
+            let data = Array.isArray(rawData) ? rawData : [];
+
+            // Clean nulls
+            data = data.filter((u: any) => u !== null && u !== undefined);
+
             setUsers(data);
         } catch (error: any) {
             if (error.response && (error.response.status === 401 || error.response.status === 403)) {
@@ -86,13 +90,19 @@ export const SystemUsersView = () => {
         try {
             // Fetch Tools
             const assetsRes = await invService.getActivos();
-            const allAssets = Array.isArray(assetsRes.data) ? assetsRes.data : (assetsRes.data?.data || []);
+            let assetsRaw = assetsRes.data?.data || assetsRes.data || [];
+            if (assetsRaw.data) assetsRaw = assetsRaw.data; // Safety deep extraction
+
+            const allAssets = Array.isArray(assetsRaw) ? assetsRaw : [];
             const myTools = allAssets.filter((a: any) => a.idTecnicoActual === user.idUsuario);
             setUserTools(myTools);
 
             // Fetch History
             const otsRes = await opeService.listarOTs({ idTecnico: user.idUsuario });
-            const myOts = Array.isArray(otsRes.data) ? otsRes.data : (otsRes.data?.data || []);
+            let otsRaw = otsRes.data?.data || otsRes.data || [];
+            if (otsRaw.data) otsRaw = otsRaw.data;
+
+            const myOts = Array.isArray(otsRaw) ? otsRaw : [];
             setUserHistory(myOts);
 
         } catch (err) {
@@ -174,7 +184,7 @@ export const SystemUsersView = () => {
         <div className="animate-fade">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <div>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>Directorio de Usuarios</h1>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff' }}>Directorio de Usuarios</h1>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Gestión de accesos, roles y perfiles técnicos</p>
                 </div>
                 <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>
