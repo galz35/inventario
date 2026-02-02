@@ -96,7 +96,7 @@ export const CatalogosView = () => {
         {
             key: 'acciones',
             label: 'Stock',
-            render: (_: any, row: any) => (
+            render: (_: any) => (
                 <a href="#consignacion" style={{ color: 'var(--primary)', textDecoration: 'underline', fontSize: '0.85rem' }}>
                     Ver Consignaciones
                 </a>

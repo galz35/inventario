@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
-import { authService, invService } from '../../services/api.service';
+import { authService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { alertSuccess, alertError } from '../../services/alert.service';
-import { User, Activity, Briefcase, Plus, Shield, ShieldOff, HardHat, TrendingUp } from 'lucide-react';
+import { User, Activity, Plus, HardHat } from 'lucide-react';
 
 export const UsuariosView = () => {
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [roles, setRoles] = useState<any[]>([]);
+
 
     // Stats
     const [stats, setStats] = useState({ total: 0, activos: 0, tecnicos: 0 });
@@ -101,7 +101,7 @@ export const UsuariosView = () => {
         {
             key: 'laborActual',
             label: 'Actividad Actual',
-            render: (val: string, row: any) => val ? (
+            render: (val: string) => val ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '0.85rem' }}>
                     <Activity size={14} className="spin-slow" /> En OT: <b>{val}</b>
                 </div>
