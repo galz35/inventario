@@ -5,8 +5,7 @@ import { RolesGuard } from '../../auth/roles.guard';
 import { Roles } from '../../auth/roles.decorator';
 
 @Controller('inv/consignacion')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'SUPERVISOR')
+@UseGuards(JwtAuthGuard)
 export class ConsignacionController {
   @Get('calcular')
   async calcularLiquidacion(

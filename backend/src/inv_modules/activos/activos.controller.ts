@@ -18,7 +18,6 @@ import { Roles } from '../../auth/roles.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ActivosController {
   @Get()
-  @Roles('ADMIN', 'AUDITOR', 'SUPERVISOR', 'TECNICO')
   async listarActivos(
     @Query('estado') estado?: string,
     @Query('idAlmacen') idAlmacen?: string,
@@ -101,7 +100,6 @@ export class ActivosController {
   }
 
   @Get(':id/historial')
-  @Roles('ADMIN', 'AUDITOR', 'SUPERVISOR')
   async obtenerHistorial(@Param('id') id: string) {
     return await activosRepo.obtenerHistorialActivo(parseInt(id));
   }

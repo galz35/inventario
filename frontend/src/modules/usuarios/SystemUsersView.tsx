@@ -3,7 +3,7 @@ import { authService, invService, opeService } from '../../services/api.service'
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { alertSuccess, alertError } from '../../services/alert.service';
-import { Activity, Plus, Shield, ShieldAlert, History, PenTool, Search } from 'lucide-react';
+import { Activity, Plus, Shield, History, PenTool, Search } from 'lucide-react';
 
 export const SystemUsersView = () => {
     // State
@@ -34,8 +34,13 @@ export const SystemUsersView = () => {
         setLoading(true);
         try {
             const res = await authService.getUsers();
-            // Defensive: ensure we get an array
-            const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            // Defensive: ensure we get an array and filter nulls
+            let data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            if (Array.isArray(data)) {
+                data = data.filter((u: any) => u !== null && u !== undefined);
+            } else {
+                data = [];
+            }
             setUsers(data);
         } catch (error: any) {
             if (error.response && (error.response.status === 401 || error.response.status === 403)) {
@@ -139,26 +144,29 @@ export const SystemUsersView = () => {
         {
             key: 'actions',
             label: 'Opciones',
-            render: (_: any, row: any) => (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                        className="btn-secondary"
-                        onClick={() => handleOpenProfile(row)}
-                        title="Ver Ficha Técnica"
-                        style={{ padding: '6px' }}
-                    >
-                        <Search size={16} />
-                    </button>
-                    <button
-                        className={row.activo ? 'btn-danger' : 'btn-primary'}
-                        onClick={() => handleToggleStatus(row)}
-                        title={row.activo ? 'Desactivar Cuenta' : 'Activar Cuenta'}
-                        style={{ padding: '6px' }}
-                    >
-                        {row.activo ? <ShieldAlert size={16} /> : <Shield size={16} />}
-                    </button>
-                </div>
-            )
+            render: (_: any, row: any) => {
+                if (!row) return null;
+                return (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            className="btn-secondary"
+                            onClick={() => handleOpenProfile(row)}
+                            title="Ver Ficha Técnica"
+                            style={{ padding: '6px' }}
+                        >
+                            <Search size={16} />
+                        </button>
+                        <button
+                            className={row.activo ? 'btn-danger' : 'btn-primary'}
+                            onClick={() => handleToggleStatus(row)}
+                            title={row.activo ? 'Desactivar Cuenta' : 'Activar Cuenta'}
+                            style={{ padding: '6px' }}
+                        >
+                            <Shield size={16} color={row.activo ? '#fff' : '#fff'} />
+                        </button>
+                    </div>
+                );
+            }
         }
     ];
 
