@@ -52,7 +52,8 @@ export const ActivosView = () => {
                 const resU = await invService.getCatalog('usuarios'); // Simplified for now
                 setUsuarios(resU.data.data || resU.data || []);
             } catch (e) { console.warn('Could not fetch users', e); }
-        } catch (err) {
+        } catch (err: any) {
+            if (err.response && (err.response.status === 403 || err.response.status === 401)) return;
             console.error('Error fetching catalogs', err);
         }
     };
@@ -72,7 +73,8 @@ export const ActivosView = () => {
             }
 
             setActivos(data);
-        } catch (err) {
+        } catch (err: any) {
+            if (err.response && (err.response.status === 403 || err.response.status === 401)) return;
             console.error(err);
         } finally {
             setLoading(false);
