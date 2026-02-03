@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
     TrendingUp, TrendingDown, AlertTriangle, Package,
-    CheckCircle, Users, DollarSign, Calendar, ClipboardList
+    DollarSign, ClipboardList
 } from 'lucide-react';
 import { invService, opeService } from '../../services/api.service';
 
@@ -64,7 +64,6 @@ export const DashboardView = ({ user, onNavigate }: { user: any, onNavigate: (vi
     const [recentActivity, setRecentActivity] = useState<any[]>([]);
     const [otStats, setOtStats] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [timeRange, setTimeRange] = useState('30d');
 
     // Mock Data for Charts (Simulating historical data if not available)
     const inventoryTrend = [
@@ -149,89 +148,63 @@ export const DashboardView = ({ user, onNavigate }: { user: any, onNavigate: (vi
 
     return (
         <div style={{ animation: 'fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}>
-            {/* Header */}
-            <header style={{
-                marginBottom: '30px',
-                display: 'flex',
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '20px'
-            }}>
-                <div style={{ minWidth: '280px' }}>
-                    <h1 style={{ fontSize: 'min(2.2rem, 8vw)', fontWeight: 800, marginBottom: '5px', background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                        Resumen Operativo
-                    </h1>
-                    <p style={{ color: '#64748b', fontSize: '1rem' }}>
-                        Bienvenido, <span style={{ color: '#f8fafc', fontWeight: 600 }}>{user.nombre}</span>.
-                    </p>
+            {/* Header Actions */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '20px', marginBottom: '30px', alignItems: 'end' }}>
+                <div>
+                    <h1 style={{ fontSize: '2rem', fontWeight: 800, margin: 0, color: '#f8fafc' }}>Resumen Operativo</h1>
+                    <p style={{ color: '#94a3b8', margin: '5px 0 0' }}>Bienvenido, {user.nombre}</p>
                 </div>
-                <div style={{ display: 'flex', gap: '12px', width: 'auto', flexWrap: 'wrap' }}>
-                    <button
-                        className={`btn-secondary ${timeRange === '30d' ? 'active' : ''}`}
-                        onClick={() => setTimeRange('30d')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}
-                    >
-                        <Calendar size={18} /> Últimos 30 días
-                    </button>
-                    <button
-                        className="btn-primary"
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', background: 'var(--success)' }}
-                        onClick={() => onNavigate('operaciones')}
-                    >
-                        <ClipboardList size={18} /> Nueva OT
-                    </button>
-                    <button
-                        className="btn-primary"
-                        onClick={() => onNavigate('inventario')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}
-                    >
-                        <Package size={18} /> Gestión Stock
-                    </button>
-                </div>
-            </header>
 
-            {/* KPI Grid */}
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <button className="btn-secondary" onClick={() => onNavigate('operaciones')} style={{ height: '42px' }}>
+                        <ClipboardList size={20} style={{ marginRight: '8px' }} />
+                        Crear OT
+                    </button>
+                    <button className="btn-primary" onClick={() => onNavigate('activos')} style={{ height: '42px', background: '#ef4444' }}>
+                        <Package size={20} style={{ marginRight: '8px' }} />
+                        Buscar Serial
+                    </button>
+                </div>
+            </div>
+
+            {/* KPI Grid - Enterprise Style */}
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
                 gap: '20px',
                 marginBottom: '30px'
             }}>
                 <StatBox
-                    title="Valor Total Inventario"
+                    title="Valor Inventario"
                     value={`$${((metrics?.valorInventario || 0) / 1000).toFixed(1)}k`}
-                    subtext="Capital inmovilizado"
+                    subtext="Capital Actual"
                     icon={DollarSign}
-                    trend={metrics?.valorInventarioDiff || 0}
-                    color="59, 130, 246" // Blue
+                    color="16, 185, 129"
                     onClick={() => onNavigate('inventario')}
                 />
                 <StatBox
-                    title="Cumplimiento SLA"
-                    value={`${metrics?.cumplimientoSLA || 100}%`}
-                    subtext="Órdenes a tiempo"
-                    icon={CheckCircle}
-                    trend={metrics?.slaDiff || 0}
-                    color="16, 185, 129" // Emerald
-                    onClick={() => onNavigate('reportes')}
-                />
-                <StatBox
-                    title="Alertas de Stock"
-                    value={metrics?.alertasStock || 0}
-                    subtext="SKUs bajo mínimo"
-                    icon={AlertTriangle}
-                    color="244, 63, 94" // Rose
-                    onClick={() => onNavigate('inventario')}
-                />
-                <StatBox
-                    title="Técnicos Activos"
-                    value={metrics?.tecnicosActivos || "0"}
-                    subtext="En campo actualmente"
-                    icon={Users}
-                    color="245, 158, 11" // Amber
+                    title="OTs Pendientes"
+                    value={otStats.find(s => s.name === 'Pendiente' || s.name === 'ABIERTA')?.value || 0}
+                    subtext="Atención Requerida"
+                    icon={ClipboardList}
+                    color="59, 130, 246"
                     onClick={() => onNavigate('operaciones')}
+                />
+                <StatBox
+                    title="Transferencias"
+                    value={recentActivity.filter(a => a.status === 'PENDIENTE').length}
+                    subtext="Por confirmar"
+                    icon={TrendingUp}
+                    color="245, 158, 11"
+                    onClick={() => onNavigate('transferencias')}
+                />
+                <StatBox
+                    title="Alertas Stock"
+                    value={metrics?.alertasStock || 0}
+                    subtext="Bajo Mínimo"
+                    icon={AlertTriangle}
+                    color="239, 68, 68"
+                    onClick={() => onNavigate('inventario')}
                 />
             </div>
 

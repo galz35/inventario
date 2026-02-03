@@ -14,10 +14,11 @@ const Toast = Swal.mixin({
     }
 });
 
-export const alertSuccess = (title: string) => {
+export const alertSuccess = (title: string, text?: string) => {
     Toast.fire({
         icon: 'success',
-        title: title
+        title: title,
+        text: text
     });
 };
 

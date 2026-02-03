@@ -114,6 +114,12 @@ export async function crearOT(dto: {
     await request.query(updateQuery);
   }
 
+  // 3. Log History
+  await logOTHistory(idOT, 'CREACION', 'REGISTRADA', 'Creación inicial', dto.idUsuarioCrea);
+  if (dto.idTecnicoAsignado) {
+    await logOTHistory(idOT, 'ASIGNACION', 'EN_PROGRESO', `Asignado a técnico ${dto.idTecnicoAsignado}`, dto.idUsuarioCrea);
+  }
+
   return res[0];
 }
 
@@ -247,7 +253,7 @@ export async function registrarConsumoOT(
   });
 }
 
-export async function asignarOT(idOT: number, idTecnico: number) {
+export async function asignarOT(idOT: number, idTecnico: number, idUsuarioResponsable: number) {
   const request = await crearRequest();
   request.input('idOT', Int, idOT);
   request.input('idTecnico', Int, idTecnico);
@@ -259,5 +265,27 @@ export async function asignarOT(idOT: number, idTecnico: number) {
         WHERE idOT = @idOT
     `;
   await request.query(query);
+  await logOTHistory(idOT, 'ASIGNACION', 'EN_PROGRESO', `Reasignado a técnico ID: ${idTecnico}`, idUsuarioResponsable);
 }
+
+export async function actualizarOT(idOT: number, dto: any, idUsuarioResponsable: number) {
+  const request = await crearRequest();
+  request.input('idOT', Int, idOT);
+
+  let updates: string[] = [];
+  if (dto.prioridad) { request.input('prio', NVarChar, dto.prioridad); updates.push("prioridad = @prio"); }
+  if (dto.descripcionTrabajo) { request.input('desc', NVarChar, dto.descripcionTrabajo); updates.push("descripcionTrabajo = @desc"); }
+  if (dto.notas) { request.input('notas', NVarChar, dto.notas); updates.push("notas = @notas"); }
+  if (dto.clienteNombre) { request.input('cliente', NVarChar, dto.clienteNombre); updates.push("clienteNombre = @cliente"); }
+  if (dto.clienteDireccion) { request.input('dir', NVarChar, dto.clienteDireccion); updates.push("clienteDireccion = @dir"); }
+  if (dto.idTipoOT) { request.input('tipo', Int, dto.idTipoOT); updates.push("idTipoOT = @tipo"); }
+
+  if (updates.length === 0) return;
+
+  const query = `UPDATE Inv_ope_ot SET ${updates.join(', ')} WHERE idOT = @idOT`;
+  await request.query(query);
+
+  await logOTHistory(idOT, 'ACTUALIZACION', 'NO_CHANGE', 'Actualización de datos', idUsuarioResponsable, JSON.stringify(dto));
+}
+
 

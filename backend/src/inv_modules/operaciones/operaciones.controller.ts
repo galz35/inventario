@@ -86,13 +86,32 @@ export class OperacionesController {
     };
   }
 
+
   @Post('ot/:id/asignar')
   @Roles('ADMIN', 'SUPERVISOR', 'DESPACHO')
   async asignarOT(
     @Param('id') id: string,
+    @Request() req: any,
     @Body() body: { idTecnico: number },
   ) {
-    await opeRepo.asignarOT(parseInt(id), body.idTecnico);
+    await opeRepo.asignarOT(parseInt(id), body.idTecnico, req.user.userId);
     return { msg: 'Técnico asignado correctamente' };
   }
+
+  @Post('ot/:id/actualizar')
+  @Roles('ADMIN', 'SUPERVISOR', 'DESPACHO')
+  async actualizarOT(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: any,
+  ) {
+    await opeRepo.actualizarOT(parseInt(id), dto, req.user.userId);
+    return { msg: 'Orden actualizada correctamente' };
+  }
+
+  @Get('ot/:id/historial')
+  async getHistorialOT(@Param('id') id: string) {
+    return await opeRepo.getHistorialOT(parseInt(id));
+  }
 }
+

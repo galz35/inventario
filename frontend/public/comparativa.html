@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparativa de Mercado: INVCORE vs Competencia</title>
+    <style>
+        :root {
+            --primary: #ef4444;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        .battle-grid {
+            display: grid;
+            grid-template-columns: 250px 1fr 1fr 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .header-cell {
+            padding: 20px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: center;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--card-bg);
+        }
+
+        .logo-box {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 900;
+        }
+
+        .invcore-col {
+            border: 2px solid var(--primary);
+            background: rgba(239, 68, 68, 0.1);
+            position: relative;
+        }
+
+        .invcore-tag {
+            position: absolute;
+            top: -12px;
+            background: var(--primary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .row-label {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .data-cell {
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .data-cell:hover {
+            transform: scale(1.02);
+            background: #2d3b4e;
+        }
+
+        .score-bar {
+            width: 100%;
+            height: 8px;
+            background: #334155;
+            border-radius: 4px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .score-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+
+        .winner-text {
+            color: var(--success);
+            font-weight: 700;
+            margin-top: 5px;
+            font-size: 0.9rem;
+        }
+
+        .loser-text {
+            color: var(--warning);
+            font-weight: 600;
+            margin-top: 5px;
+            font-size: 0.9rem;
+        }
+
+        .highlight {
+            font-size: 1.5rem;
+            font-weight: 800;
+        }
+
+        /* Responsive Icons */
+        .icon {
+            margin-bottom: 8px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>INVCORE vs El Mercado</h1>
+    <p class="subtitle">Comparativa visual clara entre tu sistema personalizado y las opciones disponibles en el mercado local y global.</p>
+
+    <div class="battle-grid">
+        <!-- Headers -->
+        <div class="header-cell" style="background: transparent; align-items: flex-start; text-align: left;">
+            FACTORES<br>CRÍTICOS
+        </div>
+
+        <div class="header-cell invcore-col">
+            <div class="invcore-tag">TU SISTEMA</div>
+            <div class="logo-box" style="background: var(--primary); color: white;">I</div>
+            INVCORE
+        </div>
+
+        <div class="header-cell">
+            <div class="logo-box" style="background: #3b82f6; color: white;">S</div>
+            SOFTLAND / LOCAL
+        </div>
+
+        <div class="header-cell">
+            <div class="logo-box" style="background: #0ea5e9; color: white;">G</div>
+            GLOBAL (SALESFORCE)
+        </div>
+
+        <!-- Row 1: UX/Facilidad -->
+        <div class="row-label">
+            🎨 Experiencia de Usuario (Facilidad)
+        </div>
+        <div class="data-cell invcore-col">
+            <div class="highlight">Moderna (Web 3.0)</div>
+            <div style="font-size: 0.9rem;">Cero Clutter, Rápido</div>
+            <div class="score-bar"><div class="score-fill" style="width: 95%; background: var(--success);"></div></div>
+            <div class="winner-text">¡Ganador!</div>
+        </div>
+        <div class="data-cell">
+            <div class="highlight">Anticuada</div>
+            <div style="font-size: 0.9rem;">Estilo Windows 98/Excel</div>
+            <div class="score-bar"><div class="score-fill" style="width: 40%; background: var(--warning);"></div></div>
+        </div>
+        <div class="data-cell">
+            <div class="highlight">Corporativa</div>
+            <div style="font-size: 0.9rem;">Muy compleja, muchos botones</div>
+            <div class="score-bar"><div class="score-fill" style="width: 70%; background: #3b82f6;"></div></div>
+        </div>
+
+        <!-- Row 2: Seriales/Inventario -->
+        <div class="row-label">
+            📦 Control de Seriales (Trazabilidad)
+        </div>
+        <div class="data-cell invcore-col">
+            <div class="highlight">Especializado</div>
+            <div style="font-size: 0.9rem;">Nativo por Item (Kardex)</div>
+            <div class="score-bar"><div class="score-fill" style="width: 100%; background: var(--success);"></div></div>
+            <div class="winner-text">Especialidad</div>
+        </div>
+        <div class="data-cell">
+            <div class="highlight">Básico</div>
+            <div style="font-size: 0.9rem;">Solo cantidades (No seriales)</div>
+            <div class="score-bar"><div class="score-fill" style="width: 30%; background: var(--danger);"></div></div>
+        </div>
+        <div class="data-cell">
+            <div class="highlight">Potente</div>
+            <div style="font-size: 0.9rem;">Bueno, pero requiere config</div>
+            <div class="score-bar"><div class="score-fill" style="width: 90%; background: #3b82f6;"></div></div>
+        </div>
+
+        <!-- Row 3: Velocidad Técnico -->
+        <div class="row-label">
+            ⚡ Velocidad en Campo
+        </div>
+        <div class="data-cell invcore-col">
+            <div class="highlight">Instantáneo</div>
+            <div style="font-size: 0.9rem;">Ctrl+K, Wizards, Cards</div>
+            <div class="score-bar"><div class="score-fill" style="width: 90%; background: var(--success);"></div></div>
+        </div>
+        <div class="data-cell">
+            <div class="highlight">Lento</div>
+            <div style="font-size: 0.9rem;">Muchas pantallas y clics</div>
+            <div class="score-bar"><div class="score-fill" style="width: 20%; background: var(--danger);"></div></div>
+        </div>
+        <div class="data-cell">
+            <div class="highlight">Media</div>
+            <div style="font-size: 0.9rem;">Depende de la conexión</div>
+            <div class="score-bar"><div class="score-fill" style="width: 60%; background: #3b82f6;"></div></div>
+        </div>
+
+         <!-- Row 4: Contabilidad -->
+         <div class="row-label">
+            💰 Contab. y Facturación
+        </div>
+        <div class="data-cell invcore-col">
+            <div class="highlight" style="color: var(--text-muted);">Nula</div>
+            <div style="font-size: 0.9rem;">No integrado a DGI</div>
+            <div class="score-bar"><div class="score-fill" style="width: 10%; background: var(--danger);"></div></div>
+            <div class="loser-text">Punto Débil</div>
+        </div>
+        <div class="data-cell">
+            <div class="highlight">Nativa</div>
+            <div style="font-size: 0.9rem;">Todo integrado fiscalmente</div>
+            <div class="score-bar"><div class="score-fill" style="width: 100%; background: var(--success);"></div></div>
+            <div class="winner-text">Líder</div>
+        </div>
+        <div class="data-cell">
+            <div class="highlight">Con Plugins</div>
+            <div style="font-size: 0.9rem;">Caros de implementar</div>
+            <div class="score-bar"><div class="score-fill" style="width: 50%; background: var(--warning);"></div></div>
+        </div>
+
+        <!-- Row 5: Precio -->
+        <div class="row-label">
+            💵 Costo / Licencia
+        </div>
+        <div class="data-cell invcore-col">
+            <div class="highlight">Control Total</div>
+            <div style="font-size: 0.9rem;">Sin mensualidades por usuario</div>
+            <div class="score-bar"><div class="score-fill" style="width: 100%; background: var(--success);"></div></div>
+        </div>
+        <div class="data-cell">
+            <div class="highlight">Alto</div>
+            <div style="font-size: 0.9rem;">Pago por módulos y soporte</div>
+            <div class="score-bar"><div class="score-fill" style="width: 50%; background: var(--warning);"></div></div>
+        </div>
+        <div class="data-cell">
+            <div class="highlight">Muy Alto</div>
+            <div style="font-size: 0.9rem;">$$$ por usuario al mes</div>
+            <div class="score-bar"><div class="score-fill" style="width: 20%; background: var(--danger);"></div></div>
+        </div>
+
+    </div>
+
+</body>
+</html>

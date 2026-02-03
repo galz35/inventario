@@ -226,6 +226,14 @@ class OperationsService {
     async asignarOT(idOT: number, idTecnico: number) {
         return api.post(`/inv/operaciones/ot/${idOT}/asignar`, { idTecnico });
     }
+
+    async actualizarOT(idOT: number, data: any) {
+        return api.post(`/inv/operaciones/ot/${idOT}/actualizar`, data);
+    }
+
+    async getHistorialOT(idOT: number) {
+        return api.get(`/inv/operaciones/ot/${idOT}/historial`);
+    }
 }
 
 // Planning Service (Tasks)

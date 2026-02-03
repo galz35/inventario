@@ -16,10 +16,11 @@ import { DashboardView } from './modules/dashboard/DashboardView';
 import {
   LayoutDashboard, Box, Truck, Calendar, ClipboardList, PenTool,
   Settings, Building2, FolderOpen, LogOut, ChevronLeft, ChevronRight,
-  UserCircle, FileText, UserCog, Users, Car
+  UserCircle, FileText, UserCog, Users, Car, Search
 } from 'lucide-react';
 import { VehiculosView } from './modules/vehiculos/VehiculosView';
 import { ActivosView } from './modules/activos/ActivosView';
+import { CommandPalette } from './components/CommandPalette';
 
 const SidebarSection = ({ label, show }: { label: string, show: boolean }) => (
   show ? <div style={{
@@ -58,6 +59,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   // State for responsive design
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [view, setView] = useState(() => {
     const hash = window.location.hash.replace('#', '');
     return hash || 'dashboard';
@@ -82,6 +84,18 @@ export default function App() {
       }
     }
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Keyboard shortcut for Command Palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Update URL when view changes
@@ -224,6 +238,34 @@ export default function App() {
           {isSidebarOpen && !isMobile ? <ChevronLeft size={20} /> : (isMobile && isSidebarOpen ? <ChevronLeft size={24} /> : (isMobile ? <ClipboardList size={24} /> : <ChevronRight size={20} />))}
         </button>
 
+        {/* Floating Search Trigger (Mobile/Desktop) */}
+        <button
+          onClick={() => setIsPaletteOpen(true)}
+          style={{
+            position: 'fixed',
+            right: '30px',
+            bottom: '30px',
+            width: '56px',
+            height: '56px',
+            borderRadius: '28px',
+            background: '#1e293b',
+            border: '1px solid #334155',
+            color: '#fff',
+            boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            cursor: 'pointer',
+            transition: 'transform 0.2s'
+          }}
+          title="Abrir Comandos (Ctrl+K)"
+          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          <Search size={24} />
+        </button>
+
         <div style={{ maxWidth: '1400px', margin: '0 auto', animation: 'fadeIn 0.5s' }}>
           {view === 'dashboard' && <DashboardView user={user} onNavigate={setView} />}
           {view === 'planificacion' && <PlanificacionView />}
@@ -242,6 +284,12 @@ export default function App() {
           {view === 'vehiculos' && <VehiculosView />}
         </div>
       </main>
+
+      <CommandPalette
+        isOpen={isPaletteOpen}
+        onClose={() => setIsPaletteOpen(false)}
+        onNavigate={(v) => { setView(v); setIsPaletteOpen(false); }}
+      />
     </div>
   );
 }

@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { generateOTPDF } from '../../utils/pdfGenerator';
-import { opeService, invService, planService } from '../../services/api.service';
+import { opeService, invService, planService, authService } from '../../services/api.service';
 import { alertSuccess, alertError } from '../../services/alert.service';
 import { Modal } from '../../components/Modal';
 import { DataTable } from '../../components/DataTable';
+import { SidePanel } from '../../components/SidePanel';
 
 export const OperacionesView = () => {
     const [ots, setOts] = useState<any[]>([]);
@@ -31,12 +32,20 @@ export const OperacionesView = () => {
         tipoNombre: 'INSTALACION',
         prioridad: 'MEDIA',
         notas: '',
-        descripcionTrabajo: ''
+        descripcionTrabajo: '',
+        idTecnicoAsignado: ''
     });
 
     const [tiposOT, setTiposOT] = useState<any[]>([]);
     const [clientes, setClientes] = useState<any[]>([]);
     const [proyectos, setProyectos] = useState<any[]>([]);
+    const [tecnicos, setTecnicos] = useState<any[]>([]);
+
+    // Edit & Reassign State
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState<any>(null);
+    const [reassignTechId, setReassignTechId] = useState('');
+    const [historialList, setHistorialList] = useState<any[]>([]);
 
     const [cierreNotas, setCierreNotas] = useState('');
     const [materialForm, setMaterialForm] = useState({ productoId: '', cantidad: 1 });
@@ -54,14 +63,20 @@ export const OperacionesView = () => {
 
     const fetchCatalogos = async () => {
         try {
-            const [resTipos, resClientes, resProyectos] = await Promise.all([
+            const [resTipos, resClientes, resProyectos, resUsers] = await Promise.all([
                 invService.getCatalog('tipos-ot'),
                 invService.getCatalog('clientes'),
-                planService.getProyectos()
+                planService.getProyectos(),
+                authService.getUsers()
             ]);
             setTiposOT(resTipos.data.data || resTipos.data || []);
             setClientes(resClientes.data.data || resClientes.data || []);
             setProyectos(resProyectos.data.data || resProyectos.data || []);
+
+            const allUsers = resUsers.data.data || resUsers.data || [];
+            // Filter users who have 'TECNICO' or 'Tecnico' role
+            const tecs = allUsers.filter((u: any) => u.rolNombre === 'TECNICO' || u.rolNombre === 'Tecnico' || u.role === 'TECNICO');
+            setTecnicos(tecs);
         } catch (e: any) {
             if (e.response && (e.response.status === 401 || e.response.status === 403)) return;
             console.error('Error fetching catalogs', e);
@@ -104,8 +119,10 @@ export const OperacionesView = () => {
                 idProyecto: formData.idProyecto ? parseInt(formData.idProyecto) : null,
                 idCliente: formData.clienteId ? parseInt(formData.clienteId) : null,
                 idTipoOT: formData.tipoId ? parseInt(formData.tipoId) : 1, // Default to 1 if not selected
-                notas: formData.notas
+                notas: formData.notas,
+                idTecnicoAsignado: formData.idTecnicoAsignado ? parseInt(formData.idTecnicoAsignado) : null
             });
+
             alertSuccess('Orden de Trabajo creada');
             setShowCreateModal(false);
             setFormData({
@@ -121,7 +138,8 @@ export const OperacionesView = () => {
                 tipoNombre: 'INSTALACION',
                 prioridad: 'MEDIA',
                 notas: '',
-                descripcionTrabajo: ''
+                descripcionTrabajo: '',
+                idTecnicoAsignado: ''
             });
             fetchOTs();
         } catch (err) {
@@ -194,7 +212,21 @@ export const OperacionesView = () => {
             key: 'acciones',
             label: 'Acción',
             render: (_: any, row: any) => (
-                <button className="btn-secondary" onClick={() => { setSelectedOT(row); setActiveTab('detalle'); setShowDetailModal(true); }}>Ver</button>
+                <button className="btn-secondary" onClick={() => {
+                    setSelectedOT(row);
+                    setReassignTechId(row.idTecnicoAsignado?.toString() || '');
+                    setEditForm({
+                        prioridad: row.prioridad,
+                        descripcionTrabajo: row.descripcionTrabajo,
+                        notas: row.notas,
+                        clienteNombre: row.clienteNombre,
+                        clienteDireccion: row.clienteDireccion,
+                        idTipoOT: row.idTipoOT || ''
+                    });
+                    setActiveTab('detalle');
+                    setHistorialList([]);
+                    setShowDetailModal(true);
+                }}>Ver</button>
             )
         }
     ];
@@ -320,7 +352,20 @@ export const OperacionesView = () => {
                             {col.items.map(ot => (
                                 <div
                                     key={ot.idOT}
-                                    onClick={() => { setSelectedOT(ot); setActiveTab('detalle'); setShowDetailModal(true); }}
+                                    onClick={() => {
+                                        setSelectedOT(ot);
+                                        setReassignTechId(ot.idTecnicoAsignado?.toString() || '');
+                                        setEditForm({
+                                            prioridad: ot.prioridad,
+                                            descripcionTrabajo: ot.descripcionTrabajo,
+                                            notas: ot.notas,
+                                            clienteNombre: ot.clienteNombre,
+                                            clienteDireccion: ot.clienteDireccion,
+                                            idTipoOT: ot.idTipoOT || ''
+                                        });
+                                        setActiveTab('detalle');
+                                        setShowDetailModal(true);
+                                    }}
                                     style={{
                                         background: '#1e293b',
                                         borderRadius: '8px',
@@ -480,6 +525,13 @@ export const OperacionesView = () => {
                         </select>
                     </div>
                     <div>
+                        <label className="form-label">Asignar Técnico</label>
+                        <select className="form-input" value={formData.idTecnicoAsignado} onChange={e => setFormData({ ...formData, idTecnicoAsignado: e.target.value })}>
+                            <option value="">-- Sin Asignar --</option>
+                            {tecnicos.map(t => <option key={t.idUsuario} value={t.idUsuario}>{t.nombre}</option>)}
+                        </select>
+                    </div>
+                    <div>
                         <label className="form-label">Prioridad</label>
                         <select className="form-input" value={formData.prioridad} onChange={e => setFormData({ ...formData, prioridad: e.target.value })}>
                             <option value="BAJA">Baja</option>
@@ -506,109 +558,231 @@ export const OperacionesView = () => {
                 </div>
             </Modal>
 
-            <Modal
+            <SidePanel
                 isOpen={showDetailModal}
                 onClose={() => setShowDetailModal(false)}
-                title={`Detalle de OT #${selectedOT?.idOT || ''}`}
-                width="800px"
+                title={`OT #${selectedOT?.idOT || ''} - ${selectedOT?.clienteNombre || ''}`}
+                width="700px"
             >
                 {selectedOT && (
-                    <div>
-                        <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
-                            <button onClick={() => setActiveTab('detalle')} className={`tab-btn ${activeTab === 'detalle' ? 'active' : ''}`}>Detalle</button>
-                            <button onClick={() => setActiveTab('evidencias')} className={`tab-btn ${activeTab === 'evidencias' ? 'active' : ''}`}>Evidencias</button>
-                            <button onClick={() => setActiveTab('historial')} className={`tab-btn ${activeTab === 'historial' ? 'active' : ''}`}>Historial</button>
+                    <div className="ot-drawer-content">
+                        {/* Status Badge Banner */}
+                        <div style={{
+                            background: statusColor(selectedOT.estado) + '15',
+                            borderLeft: `4px solid ${statusColor(selectedOT.estado)}`,
+                            padding: '12px 16px',
+                            marginBottom: '24px',
+                            borderRadius: '0 8px 8px 0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <span style={{ fontWeight: 700, color: statusColor(selectedOT.estado) }}>{selectedOT.estado}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Prioridad: <b style={{ color: '#fff' }}>{selectedOT.prioridad}</b></span>
+                        </div>
+
+                        {/* Tabs */}
+                        <div style={{ display: 'flex', gap: '2px', marginBottom: '24px', background: '#334155', padding: '4px', borderRadius: '12px' }}>
+                            <button onClick={() => setActiveTab('detalle')}
+                                style={{ flex: 1, padding: '8px', borderRadius: '8px', background: activeTab === 'detalle' ? '#1e293b' : 'transparent', color: activeTab === 'detalle' ? '#fff' : '#94a3b8', border: 'none', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                Detalle
+                            </button>
+                            <button onClick={() => setActiveTab('evidencias')}
+                                style={{ flex: 1, padding: '8px', borderRadius: '8px', background: activeTab === 'evidencias' ? '#1e293b' : 'transparent', color: activeTab === 'evidencias' ? '#fff' : '#94a3b8', border: 'none', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                Evidencias
+                            </button>
+                            <button onClick={async () => {
+                                setActiveTab('historial');
+                                try {
+                                    const res = await opeService.getHistorialOT(selectedOT.idOT);
+                                    setHistorialList(res.data.data || res.data || []);
+                                } catch (e) { console.error(e); }
+                            }}
+                                style={{ flex: 1, padding: '8px', borderRadius: '8px', background: activeTab === 'historial' ? '#1e293b' : 'transparent', color: activeTab === 'historial' ? '#fff' : '#94a3b8', border: 'none', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                Historial
+                            </button>
                         </div>
 
                         {activeTab === 'detalle' ? (
                             <>
                                 <div style={{
-                                    background: 'rgba(255,255,255,0.05)',
-                                    padding: '20px',
-                                    borderRadius: '12px',
-                                    marginBottom: '20px',
                                     display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                                    gap: '15px'
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                    gap: '20px',
+                                    marginBottom: '30px'
                                 }}>
-                                    <div><label className="form-label">Cliente</label><div style={{ fontWeight: 700 }}>{selectedOT.clienteNombre || selectedOT.cliente}</div></div>
-                                    <div><label className="form-label">Nro Cliente</label><div>{selectedOT.numeroCliente || '--'}</div></div>
-                                    <div><label className="form-label">Persona Contacto</label><div>{selectedOT.contactoNombre || '--'}</div></div>
-                                    <div><label className="form-label">Teléfono</label><div>{selectedOT.telefono || '--'}</div></div>
-                                    <div style={{ gridColumn: '1 / -1' }}><label className="form-label">Descripción del Trabajo</label><div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', fontSize: '0.9rem' }}>{selectedOT.descripcionTrabajo || '--'}</div></div>
-                                    <div><label className="form-label">Dirección</label><div style={{ fontSize: '0.85rem' }}>{selectedOT.clienteDireccion || selectedOT.direccion}</div></div>
-                                    <div><label className="form-label">Estado</label><div style={{ color: statusColor(selectedOT.estado), fontWeight: 700 }}>{selectedOT.estado}</div></div>
-                                    <div><label className="form-label">Técnico</label><div style={{ fontWeight: 600 }}>{selectedOT.tecnicoNombre || selectedOT.tecnico || 'Sin Asignar'}</div></div>
+                                    <div><label className="form-label">Cliente</label><div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{selectedOT.clienteNombre || selectedOT.cliente}</div></div>
+                                    <div><label className="form-label">Teléfono</label><div style={{ fontFamily: 'monospace' }}>{selectedOT.telefono || '--'}</div></div>
+                                    <div><label className="form-label">Contacto</label><div>{selectedOT.contactoNombre || '--'}</div></div>
+                                    <div style={{ gridColumn: '1 / -1' }}><label className="form-label">Dirección</label><div style={{ fontSize: '0.95rem', color: '#e2e8f0' }}>{selectedOT.clienteDireccion || selectedOT.direccion}</div></div>
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                        <label className="form-label">Trabajo Requerido</label>
+                                        <div style={{ background: '#1e293b', padding: '12px', borderRadius: '8px', fontSize: '0.9rem', color: '#cbd5e1', lineHeight: '1.5' }}>
+                                            {selectedOT.descripcionTrabajo || 'Sin descripción detallada.'}
+                                        </div>
+                                    </div>
                                 </div>
 
+                                {/* Supervisor Actions: Reassign & Edit */}
+                                {isSupervisor && selectedOT.estado !== 'FINALIZADA' && (
+                                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #334155' }}>
+                                        <h4 style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: 'var(--primary)' }}>🛠️ Gestión de Orden</h4>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                                            <div>
+                                                <label className="form-label">Reasignar Técnico</label>
+                                                <div style={{ display: 'flex', gap: '5px' }}>
+                                                    <select
+                                                        className="form-input"
+                                                        value={reassignTechId}
+                                                        onChange={(e) => setReassignTechId(e.target.value)}
+                                                    >
+                                                        <option value="">-- Sin Asignar --</option>
+                                                        {tecnicos.map(t => <option key={t.idUsuario} value={t.idUsuario}>{t.nombre}</option>)}
+                                                    </select>
+                                                    <button
+                                                        className="btn-primary"
+                                                        onClick={async () => {
+                                                            if (!reassignTechId) return;
+                                                            try {
+                                                                await opeService.asignarOT(selectedOT.idOT, parseInt(reassignTechId));
+                                                                alertSuccess('Técnico reasignado');
+                                                                fetchOTs();
+                                                                const techName = tecnicos.find(t => t.idUsuario.toString() === reassignTechId)?.nombre;
+                                                                setSelectedOT({ ...selectedOT, idTecnicoAsignado: parseInt(reassignTechId), tecnicoNombre: techName, estado: selectedOT.estado === 'PENDIENTE' ? 'EN_PROGRESO' : selectedOT.estado });
+                                                            } catch (e) { alertError('Error al reasignar'); }
+                                                        }}
+                                                    >
+                                                        💾
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                                                <button
+                                                    className={`btn-secondary ${isEditing ? 'active' : ''}`}
+                                                    style={{ width: '100%' }}
+                                                    onClick={() => setIsEditing(!isEditing)}
+                                                >
+                                                    {isEditing ? 'Cancelar Edición' : '✏️ Editar Datos OT'}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {isEditing && (
+                                            <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.1)', animation: 'fadeIn 0.3s' }}>
+                                                <div style={{ display: 'grid', gap: '10px' }}>
+                                                    <div>
+                                                        <label className="form-label">Descripción Trabajo</label>
+                                                        <textarea className="form-input" value={editForm.descripcionTrabajo} onChange={e => setEditForm({ ...editForm, descripcionTrabajo: e.target.value })} />
+                                                    </div>
+                                                    <div>
+                                                        <label className="form-label">Dirección</label>
+                                                        <input className="form-input" value={editForm.clienteDireccion} onChange={e => setEditForm({ ...editForm, clienteDireccion: e.target.value })} />
+                                                    </div>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                                        <div>
+                                                            <label className="form-label">Prioridad</label>
+                                                            <select className="form-input" value={editForm.prioridad} onChange={e => setEditForm({ ...editForm, prioridad: e.target.value })}>
+                                                                <option value="BAJA">Baja</option>
+                                                                <option value="MEDIA">Media</option>
+                                                                <option value="ALTA">Alta</option>
+                                                                <option value="CRITICA">Critica</option>
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label className="form-label">Tipo OT</label>
+                                                            <select className="form-input" value={editForm.idTipoOT} onChange={e => setEditForm({ ...editForm, idTipoOT: e.target.value })}>
+                                                                {tiposOT.map(t => <option key={t.idTipoOT} value={t.idTipoOT}>{t.nombre}</option>)}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        className="btn-primary"
+                                                        style={{ marginTop: '10px' }}
+                                                        onClick={async () => {
+                                                            try {
+                                                                await opeService.actualizarOT(selectedOT.idOT, editForm);
+                                                                alertSuccess('Orden actualizada');
+                                                                setIsEditing(false);
+                                                                fetchOTs();
+                                                                setSelectedOT({ ...selectedOT, ...editForm });
+                                                            } catch (e) { alertError('Error al actualizar'); }
+                                                        }}
+                                                    >
+                                                        Guardar Cambios
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Flow for Technicians */}
                                 {isTecnico && selectedOT.estado !== 'FINALIZADA' && (
-                                    <div style={{ borderTop: '1px solid #333', paddingTop: '20px' }}>
+                                    <div style={{ borderTop: '1px solid #334155', paddingTop: '24px' }}>
                                         {step === 1 && (
                                             <>
-                                                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '15px', borderRadius: '12px', marginBottom: '20px' }}>
-                                                    <h4 style={{ fontSize: '0.9rem', marginBottom: '10px' }}>Registrar Consumo de Material</h4>
-                                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                                        <select className="form-input" style={{ flex: '1 1 200px' }} value={materialForm.productoId} onChange={e => setMaterialForm({ ...materialForm, productoId: e.target.value })}>
-                                                            <option value="">-- Seleccionar Item --</option>
-                                                            {productos.map(p => <option key={p.idProducto} value={p.idProducto}>{p.codigo} - {p.nombre}</option>)}
-                                                        </select>
-                                                        <input type="number" className="form-input" style={{ width: '80px' }} value={materialForm.cantidad} onChange={e => setMaterialForm({ ...materialForm, cantidad: Number(e.target.value) })} min="1" />
+                                                <div style={{ marginBottom: '24px' }}>
+                                                    <h4 style={{ fontSize: '1rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ background: '#3b82f6', color: '#fff', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}>1</span>
+                                                        Materiales y Consumos
+                                                    </h4>
+                                                    <div style={{ background: '#1e293b', padding: '16px', borderRadius: '12px', border: '1px solid #334155' }}>
+                                                        <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                                                            <select className="form-input" style={{ flex: 1 }} value={materialForm.productoId} onChange={e => setMaterialForm({ ...materialForm, productoId: e.target.value })}>
+                                                                <option value="">Buscar producto...</option>
+                                                                {productos.map(p => <option key={p.idProducto} value={p.idProducto}>{p.codigo} - {p.nombre}</option>)}
+                                                            </select>
+                                                            <input type="number" className="form-input" style={{ width: '80px' }} value={materialForm.cantidad} onChange={e => setMaterialForm({ ...materialForm, cantidad: Number(e.target.value) })} min="1" />
+                                                        </div>
 
                                                         {(() => {
                                                             const selectedProd = productos.find(p => p.idProducto.toString() === materialForm.productoId);
                                                             const stockDisp = selectedProd ? (selectedProd.stockActual || 0) : 0;
                                                             const hasStock = stockDisp >= materialForm.cantidad;
 
-                                                            return (
-                                                                <>
-                                                                    {materialForm.productoId && (
-                                                                        <div style={{
-                                                                            display: 'flex', alignItems: 'center',
-                                                                            padding: '0 10px', borderRadius: '6px',
-                                                                            background: hasStock ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                                                                            color: hasStock ? '#10b981' : '#ef4444',
-                                                                            fontWeight: 700, fontSize: '0.85rem'
-                                                                        }}>
-                                                                            Stock: {stockDisp}
-                                                                        </div>
-                                                                    )}
+                                                            return materialForm.productoId ? (
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <div style={{ fontSize: '0.85rem', color: hasStock ? '#10b981' : '#ef4444' }}>
+                                                                        Stock Disponible: <b>{stockDisp}</b>
+                                                                    </div>
                                                                     <button
                                                                         className="btn-primary"
-                                                                        style={{ flex: '1', opacity: hasStock ? 1 : 0.5, cursor: hasStock ? 'pointer' : 'not-allowed' }}
+                                                                        style={{ padding: '6px 16px', fontSize: '0.85rem', background: hasStock ? '#3b82f6' : '#64748b', opacity: hasStock ? 1 : 0.7 }}
                                                                         onClick={handleAddMaterial}
-                                                                        disabled={submittingMaterial || !hasStock || !materialForm.productoId}
+                                                                        disabled={submittingMaterial || !hasStock}
                                                                     >
-                                                                        {hasStock ? 'Añadir' : 'Sin Stock'}
+                                                                        {hasStock ? '+ Agregar' : 'No Disponible'}
                                                                     </button>
-                                                                </>
-                                                            );
+                                                                </div>
+                                                            ) : null;
                                                         })()}
                                                     </div>
                                                 </div>
-                                                <button className="btn-primary" style={{ width: '100%' }} onClick={() => setStep(2)}>Iniciar Cierre de Orden</button>
+                                                <button className="btn-primary" style={{ width: '100%', background: '#10b981', padding: '12px' }} onClick={() => setStep(2)}>
+                                                    Continuar al Cierre
+                                                </button>
                                             </>
                                         )}
 
                                         {step === 2 && (
                                             <div style={{ animation: 'fadeIn 0.3s' }}>
-                                                <h4 style={{ color: 'var(--primary)', marginBottom: '15px' }}>Paso 1/2: Checklist de Seguridad y Calidad</h4>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={checklist.epp} onChange={e => setChecklist({ ...checklist, epp: e.target.checked })} style={{ width: '18px', height: '18px' }} />
-                                                        <span>Uso correcto de EPP (Casco, Botas, Guantes)</span>
-                                                    </label>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={checklist.seguridad} onChange={e => setChecklist({ ...checklist, seguridad: e.target.checked })} style={{ width: '18px', height: '18px' }} />
-                                                        <span>Zona de trabajo segura y señalizada</span>
-                                                    </label>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={checklist.calidad} onChange={e => setChecklist({ ...checklist, calidad: e.target.checked })} style={{ width: '18px', height: '18px' }} />
-                                                        <span>Trabajo cumple estándar de calidad</span>
-                                                    </label>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={checklist.limpieza} onChange={e => setChecklist({ ...checklist, limpieza: e.target.checked })} style={{ width: '18px', height: '18px' }} />
-                                                        <span>Limpieza del sitio realizada</span>
-                                                    </label>
+                                                <h4 style={{ fontSize: '1rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ background: '#3b82f6', color: '#fff', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}>2</span>
+                                                    Checklist de Calidad
+                                                </h4>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
+                                                    {['epp', 'seguridad', 'calidad', 'limpieza'].map((key) => (
+                                                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: checklist[key as keyof typeof checklist] ? 'rgba(16, 185, 129, 0.1)' : '#1e293b', borderRadius: '8px', cursor: 'pointer', border: checklist[key as keyof typeof checklist] ? '1px solid #10b981' : '1px solid #334155', transition: 'all 0.2s' }}>
+                                                            <input type="checkbox" checked={checklist[key as keyof typeof checklist]} onChange={e => setChecklist({ ...checklist, [key]: e.target.checked })} style={{ accentColor: '#10b981', width: '18px', height: '18px' }} />
+                                                            <span style={{ fontSize: '0.9rem', color: checklist[key as keyof typeof checklist] ? '#fff' : '#94a3b8' }}>
+                                                                {key === 'epp' ? 'Uso de EPP Completo' :
+                                                                    key === 'seguridad' ? 'Zona Segura' :
+                                                                        key === 'calidad' ? 'Calidad Verificada' : 'Limpieza Final'}
+                                                            </span>
+                                                        </label>
+                                                    ))}
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '10px' }}>
                                                     <button className="btn-secondary" onClick={() => setStep(1)} style={{ flex: 1 }}>Atrás</button>
@@ -619,39 +793,31 @@ export const OperacionesView = () => {
 
                                         {step === 3 && (
                                             <div style={{ animation: 'fadeIn 0.3s' }}>
-                                                <h4 style={{ color: 'var(--primary)', marginBottom: '15px' }}>Paso 2/2: Confirmación y Firma</h4>
-                                                <div style={{ marginBottom: '15px' }}>
-                                                    <label className="form-label">Notas Finales de Cierre</label>
-                                                    <textarea className="form-input" placeholder="Observaciones finales..." value={cierreNotas} onChange={e => setCierreNotas(e.target.value)} style={{ minHeight: '60px' }} />
+                                                <h4 style={{ fontSize: '1rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ background: '#3b82f6', color: '#fff', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}>3</span>
+                                                    Firma de Conformidad
+                                                </h4>
+                                                <div style={{ marginBottom: '20px' }}>
+                                                    <label className="form-label">Notas Finales</label>
+                                                    <textarea className="form-input" placeholder="Comentarios del cliente..." value={cierreNotas} onChange={e => setCierreNotas(e.target.value)} style={{ minHeight: '80px', background: '#1e293b', border: '1px solid #334155' }} />
                                                 </div>
-                                                <div style={{ marginBottom: '15px' }}>
-                                                    <label className="form-label">Firma del Cliente / Conformidad</label>
-                                                    <div style={{ border: '1px solid #444', background: '#fff', borderRadius: '8px', overflow: 'hidden', position: 'relative', touchAction: 'none' }}>
+                                                <div style={{ marginBottom: '20px' }}>
+                                                    <div style={{ border: '2px dashed #475569', background: '#e2e8f0', borderRadius: '12px', overflow: 'hidden', position: 'relative', touchAction: 'none' }}>
                                                         <canvas
                                                             ref={canvasRef}
-                                                            width={800} // Coordinate system width
-                                                            height={250} // Coordinate system height
-                                                            style={{
-                                                                width: '100%',
-                                                                height: 'auto',
-                                                                minHeight: '200px',
-                                                                cursor: 'crosshair',
-                                                                display: 'block'
-                                                            }}
-                                                            onMouseDown={startDrawing}
-                                                            onMouseMove={draw}
-                                                            onMouseUp={stopDrawing}
-                                                            onMouseLeave={stopDrawing}
-                                                            onTouchStart={startDrawing}
-                                                            onTouchMove={draw}
-                                                            onTouchEnd={stopDrawing}
+                                                            width={600}
+                                                            height={200}
+                                                            style={{ width: '100%', height: 'auto', minHeight: '150px', display: 'block' }}
+                                                            onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
+                                                            onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
                                                         />
-                                                        <button onClick={clearSignature} style={{ position: 'absolute', bottom: '5px', right: '5px', background: '#ef4444', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }}>Borrar Firma</button>
+                                                        <button onClick={clearSignature} style={{ position: 'absolute', bottom: '10px', right: '10px', background: '#ef4444', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>Borrar</button>
+                                                        <div style={{ position: 'absolute', top: '10px', left: '10px', color: '#64748b', fontSize: '0.7rem', pointerEvents: 'none', textTransform: 'uppercase', letterSpacing: '1px' }}>Firma Aquí</div>
                                                     </div>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '10px' }}>
                                                     <button className="btn-secondary" onClick={() => setStep(2)} style={{ flex: 1 }}>Atrás</button>
-                                                    <button className="btn-primary" onClick={handleFinalize} style={{ flex: 1, background: '#10b981' }}>Finalizar y Firmar</button>
+                                                    <button className="btn-primary" onClick={handleFinalize} style={{ flex: 2, background: '#10b981', fontWeight: 700 }}>Finalizar Orden</button>
                                                 </div>
                                             </div>
                                         )}
@@ -660,11 +826,23 @@ export const OperacionesView = () => {
                             </>
                         ) : activeTab === 'evidencias' ? (
                             <div>
-                                <h4 style={{ fontSize: '0.9rem', marginBottom: '15px' }}>Fotos de Respaldo</h4>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px', marginBottom: '20px' }}>
-                                    {/* Aquí se listarían las evidencias previas si el API las devolviera */}
-                                    <div style={{ border: '2px dashed #444', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '120px', cursor: 'pointer', position: 'relative' }}>
-                                        <span style={{ fontSize: '0.8rem', color: '#888' }}>+ Subir Foto</span>
+                                <h4 style={{ fontSize: '0.9rem', marginBottom: '15px', color: '#94a3b8' }}>Evidencia Fotográfica</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>
+                                    <div style={{
+                                        border: '2px dashed #334155',
+                                        borderRadius: '12px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '130px',
+                                        cursor: 'pointer',
+                                        position: 'relative',
+                                        background: 'rgba(255,255,255,0.02)',
+                                        transition: 'border-color 0.2s'
+                                    }} className="upload-box">
+                                        <span style={{ fontSize: '2rem', color: '#64748b', marginBottom: '5px' }}>+</span>
+                                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Subir Foto</span>
                                         <input type="file" accept="image/*" style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} onChange={async (e) => {
                                             const file = e.target.files?.[0];
                                             if (!file) return;
@@ -681,18 +859,28 @@ export const OperacionesView = () => {
                                         }} />
                                     </div>
                                 </div>
-                                <p style={{ fontSize: '0.75rem', color: '#666' }}>Las fotos se guardarán como evidencia del trabajo realizado.</p>
                             </div>
                         ) : (
-                            <div className="historial-list">
-                                <div className="historial-item"><b>Fecha Creación:</b> {new Date(selectedOT.fechaCreacion).toLocaleString()}</div>
-                                {selectedOT.fechaAsignacion && <div className="historial-item"><b>Asignada el:</b> {new Date(selectedOT.fechaAsignacion).toLocaleString()}</div>}
-                                {selectedOT.estado === 'FINALIZADA' && <div className="historial-item"><b>Nota de Cierre:</b> {selectedOT.notas}</div>}
+                            <div className="historial-list" style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxHeight: '500px', overflowY: 'auto' }}>
+                                {historialList.length > 0 ? (
+                                    historialList.map((h, idx) => (
+                                        <div key={idx} style={{ background: '#1e293b', padding: '12px', borderRadius: '8px', borderLeft: `3px solid ${h.accion === 'CREACION' ? '#3b82f6' : h.accion === 'CIERRE' ? '#10b981' : h.accion === 'ASIGNACION' ? '#f59e0b' : '#8b5cf6'}` }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold', textTransform: 'uppercase' }}>{h.accion || 'EVENTO'}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{new Date(h.fecha).toLocaleString()}</div>
+                                            </div>
+                                            <div style={{ fontSize: '0.9rem', color: '#e2e8f0' }}>{h.notas || h.detalles}</div>
+                                            {h.usuarioNombre && <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>Por: {h.usuarioNombre}</div>}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>Cargando historial o sin registros...</div>
+                                )}
                             </div>
                         )}
                     </div>
                 )}
-            </Modal>
+            </SidePanel>
         </div>
     );
 };

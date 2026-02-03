@@ -50,21 +50,14 @@ export const DataTable = ({ columns, data, loading, title, description, actions,
         setFilters(prev => ({ ...prev, [key]: value }));
     };
 
-    const exportCSV = () => {
+    const exportExcel = () => {
         if (filteredData.length === 0) return;
-        const headers = columns.filter(c => c.key !== 'acciones').map(c => c.label);
-        const rows = filteredData.map(row =>
-            columns.filter(c => c.key !== 'acciones').map(col => `"${row[col.key] || ''}"`).join(",")
-        );
 
-        const content = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.join("\n");
-        const encodedUri = encodeURI(content);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `export_${title?.replace(/\s+/g, '_') || 'data'}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Dynamic import to avoid huge bundle size if not used
+        import('../utils/excelGenerator').then(({ exportToExcel, formatDataForExport }) => {
+            const formatted = formatDataForExport(filteredData, columns);
+            exportToExcel(formatted, title?.replace(/\s+/g, '_') || 'Export', 'Datos');
+        });
     };
 
     return (
@@ -84,8 +77,8 @@ export const DataTable = ({ columns, data, loading, title, description, actions,
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                         {allowExport && (
-                            <button className="btn-secondary" onClick={exportCSV} style={{ padding: '8px 12px', fontSize: '0.8rem' }}>
-                                📊 Exportar
+                            <button className="btn-secondary" onClick={exportExcel} style={{ padding: '8px 12px', fontSize: '0.8rem' }}>
+                                📊 Exportar Excel
                             </button>
                         )}
                         {actions}

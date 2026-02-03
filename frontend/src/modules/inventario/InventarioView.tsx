@@ -6,6 +6,7 @@ import { Modal } from '../../components/Modal';
 import { generateInventoryPDF } from '../../utils/pdfGenerator';
 import { FileText } from 'lucide-react';
 import { KardexTimeline } from './components/KardexTimeline';
+import { SidePanel } from '../../components/SidePanel';
 
 export const InventarioView = () => {
     const [stock, setStock] = useState([]);
@@ -47,6 +48,9 @@ export const InventarioView = () => {
         costoUnitario: 0,
         notas: ''
     });
+
+    const [productSearchTerm, setProductSearchTerm] = useState('');
+    const [showProductDropdown, setShowProductDropdown] = useState(false);
 
     const fetchStock = async (almacenId?: string) => {
         setLoading(true);
@@ -130,6 +134,7 @@ export const InventarioView = () => {
             fetchStock(selectedAlmacen);
             // Reset basic fields
             setEntryForm(prev => ({ ...prev, cantidad: 1, notas: '', productoId: '' }));
+            setProductSearchTerm('');
         } catch (err) {
             alertError('Error al registrar entrada');
         } finally {
@@ -360,31 +365,47 @@ export const InventarioView = () => {
                 }
             />
 
-            {/* Modal Historial */}
-            <Modal
+            {/* Drawer Historial */}
+            <SidePanel
                 isOpen={!!selectedItem}
                 onClose={() => setSelectedItem(null)}
-                title={`Línea de Vida del Producto`}
-                width="800px"
+                title="Línea de Vida del Producto"
+                width="600px"
+                footer={
+                    <button className="btn-secondary" onClick={() => setSelectedItem(null)}>
+                        Cerrar Panel
+                    </button>
+                }
             >
                 {selectedItem && (
-                    <div style={{ marginBottom: '20px' }}>
-                        <h4 style={{ color: 'var(--primary)', marginBottom: '5px' }}>{selectedItem.productoNombre}</h4>
-                        <div style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'flex', gap: '15px' }}>
-                            <span>Código: {selectedItem.productoCodigo}</span>
-                            <span>Almacén Actual: {selectedItem.almacenNombre}</span>
+                    <div style={{ marginBottom: '30px', background: 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '12px' }}>
+                        <h4 style={{ color: '#fff', marginBottom: '8px', fontSize: '1.1rem' }}>{selectedItem.productoNombre}</h4>
+                        <div style={{ display: 'flex', gap: '20px', fontSize: '0.9rem', color: '#94a3b8' }}>
+                            <div>
+                                <span style={{ display: 'block', textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '1px', marginBottom: '4px' }}>SKU Código</span>
+                                <code style={{ background: '#0f172a', padding: '4px 8px', borderRadius: '4px', color: '#e2e8f0' }}>{selectedItem.productoCodigo}</code>
+                            </div>
+                            <div>
+                                <span style={{ display: 'block', textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '1px', marginBottom: '4px' }}>Ubicación</span>
+                                <span style={{ color: '#e2e8f0' }}>{selectedItem.almacenNombre}</span>
+                            </div>
+                            <div>
+                                <span style={{ display: 'block', textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '1px', marginBottom: '4px' }}>Stock Actual</span>
+                                <span style={{ color: '#10b981', fontWeight: 700 }}>{selectedItem.cantidad} {selectedItem.unidad}</span>
+                            </div>
                         </div>
                     </div>
                 )}
 
                 {loadingKardex ? (
                     <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
-                        <div>Cargando historia...</div>
+                        <div className="spinner" style={{ margin: '0 auto 10px' }}></div>
+                        <div>Rastreando historia...</div>
                     </div>
                 ) : (
                     <KardexTimeline movimientos={kardex} />
                 )}
-            </Modal>
+            </SidePanel>
 
             {/* Modal de Entrada Manual */}
             <Modal
@@ -393,21 +414,16 @@ export const InventarioView = () => {
                 title="Registrar Entrada de Mercancía"
                 width="600px"
             >
-                <div style={{ display: 'flex', gap: '10px', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px' }}>
-                    <button
-                        className={`tab - btn ${entryType === 'EMPRESA' ? 'active' : ''} `}
-                        style={{ flex: 1, justifyContent: 'center' }}
-                        onClick={() => setEntryType('EMPRESA')}
+                <div className="form-group">
+                    <label className="form-label">Tipo de Entrada</label>
+                    <select
+                        className="form-input"
+                        value={entryType}
+                        onChange={(e) => setEntryType(e.target.value)}
                     >
-                        Compra Propia
-                    </button>
-                    <button
-                        className={`tab - btn ${entryType === 'PROVEEDOR' ? 'active' : ''} `}
-                        style={{ flex: 1, justifyContent: 'center' }}
-                        onClick={() => setEntryType('PROVEEDOR')}
-                    >
-                        Consignación
-                    </button>
+                        <option value="EMPRESA">Compra Propia</option>
+                        <option value="PROVEEDOR">Consignación</option>
+                    </select>
                 </div>
 
                 <div style={{
@@ -421,12 +437,74 @@ export const InventarioView = () => {
                             {almacenes.map(alm => <option key={alm.idAlmacen} value={alm.idAlmacen}>{alm.nombre}</option>)}
                         </select>
                     </div>
-                    <div className="form-group">
+                    <div className="form-group" style={{ position: 'relative' }}>
                         <label className="form-label">Producto</label>
-                        <select className="form-input" value={entryForm.productoId} onChange={e => setEntryForm({ ...entryForm, productoId: e.target.value })}>
-                            <option value="">Seleccionar</option>
-                            {productos.map(p => <option key={p.idProducto} value={p.idProducto}>{p.codigo} - {p.nombre}</option>)}
-                        </select>
+                        <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Buscar código o nombre..."
+                            value={productSearchTerm}
+                            onChange={e => {
+                                setProductSearchTerm(e.target.value);
+                                setShowProductDropdown(true);
+                                setEntryForm(prev => ({ ...prev, productoId: '' }));
+                            }}
+                            onFocus={() => setShowProductDropdown(true)}
+                        />
+                        {showProductDropdown && (
+                            <>
+                                <div
+                                    style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 99 }}
+                                    onClick={() => setShowProductDropdown(false)}
+                                />
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    left: 0,
+                                    right: 0,
+                                    maxHeight: '200px',
+                                    overflowY: 'auto',
+                                    background: '#1a1a1a',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '0 0 6px 6px',
+                                    zIndex: 100,
+                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)'
+                                }}>
+                                    {productos
+                                        .filter(p => {
+                                            const term = productSearchTerm.toLowerCase();
+                                            return p.codigo.toLowerCase().includes(term) ||
+                                                p.nombre.toLowerCase().includes(term);
+                                        })
+                                        .map(p => (
+                                            <div
+                                                key={p.idProducto}
+                                                onClick={() => {
+                                                    setEntryForm(prev => ({ ...prev, productoId: p.idProducto }));
+                                                    setProductSearchTerm(`${p.codigo} - ${p.nombre}`);
+                                                    setShowProductDropdown(false);
+                                                }}
+                                                style={{
+                                                    padding: '10px 12px',
+                                                    cursor: 'pointer',
+                                                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <span style={{ fontSize: '0.9rem' }}>{p.nombre}</span>
+                                                <code style={{ fontSize: '0.75rem', color: 'var(--primary)', background: 'rgba(255,255,255,0.05)', padding: '2px 4px', borderRadius: '3px' }}>{p.codigo}</code>
+                                            </div>
+                                        ))}
+                                    {productos.filter(p => p.codigo.toLowerCase().includes(productSearchTerm.toLowerCase()) || p.nombre.toLowerCase().includes(productSearchTerm.toLowerCase())).length === 0 && (
+                                        <div style={{ padding: '12px', color: 'var(--text-secondary)', textAlign: 'center', fontSize: '0.9rem' }}>No se encontraron productos</div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -440,8 +518,16 @@ export const InventarioView = () => {
                         <input type="number" className="form-input" min="1" value={entryForm.cantidad} onChange={e => setEntryForm({ ...entryForm, cantidad: Number(e.target.value) })} />
                     </div>
                     <div className="form-group">
-                        <label className="form-label">Costo Unitario ($)</label>
-                        <input type="number" className="form-input" min="0" step="0.01" value={entryForm.costoUnitario} onChange={e => setEntryForm({ ...entryForm, costoUnitario: Number(e.target.value) })} />
+                        <label className="form-label">Costo Unitario ($) <span style={{ fontSize: '0.7em', color: 'var(--text-secondary)' }}>(Opcional)</span></label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={entryForm.costoUnitario === 0 ? '' : entryForm.costoUnitario}
+                            onChange={e => setEntryForm({ ...entryForm, costoUnitario: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                        />
                     </div>
                 </div>
 

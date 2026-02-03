@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { invService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
 import { ReporteTecnicoView } from './ReporteTecnicoView';
+import { CierreMesView } from './CierreMesView';
 
 export const ReportesView = () => {
     const [slaData, setSlaData] = useState([]);
     const [consumoData, setConsumoData] = useState([]);
-    const [activeTab, setActiveTab] = useState('sla'); // sla | consumo
+    const [activeTab, setActiveTab] = useState('sla'); // sla | consumo | tecnico | cierre
     const [loading, setLoading] = useState(true);
 
     const fetchReports = async () => {
@@ -69,32 +70,27 @@ export const ReportesView = () => {
             </div>
 
             <div className="card" style={{ padding: '0' }}>
-                <div style={{ display: 'flex', gap: '20px', padding: '20px', borderBottom: '1px solid var(--border)' }}>
-                    <h3
-                        onClick={() => setActiveTab('sla')}
-                        style={{ margin: 0, cursor: 'pointer', color: activeTab === 'sla' ? 'var(--primary)' : '#666', borderBottom: activeTab === 'sla' ? '2px solid var(--primary)' : 'none', paddingBottom: '5px' }}
-                    >Cumplimiento SLA</h3>
-                    <h3
-                        onClick={() => setActiveTab('consumo')}
-                        style={{ margin: 0, cursor: 'pointer', color: activeTab === 'consumo' ? 'var(--primary)' : '#666', borderBottom: activeTab === 'consumo' ? '2px solid var(--primary)' : 'none', paddingBottom: '5px' }}
-                    >Consumo de Materiales</h3>
-                    <h3
-                        onClick={() => setActiveTab('tecnico')}
-                        style={{ margin: 0, cursor: 'pointer', color: activeTab === 'tecnico' ? 'var(--primary)' : '#666', borderBottom: activeTab === 'tecnico' ? '2px solid var(--primary)' : 'none', paddingBottom: '5px' }}
-                    >Consumo Técnico Diario</h3>
+                <div style={{ display: 'flex', gap: '20px', padding: '20px', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
+                    <h3 onClick={() => setActiveTab('sla')} style={{ margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', color: activeTab === 'sla' ? 'var(--primary)' : '#666', borderBottom: activeTab === 'sla' ? '2px solid var(--primary)' : 'none', paddingBottom: '5px' }}>Cumplimiento SLA</h3>
+                    <h3 onClick={() => setActiveTab('consumo')} style={{ margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', color: activeTab === 'consumo' ? 'var(--primary)' : '#666', borderBottom: activeTab === 'consumo' ? '2px solid var(--primary)' : 'none', paddingBottom: '5px' }}>Consumo Materiales</h3>
+                    <h3 onClick={() => setActiveTab('tecnico')} style={{ margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', color: activeTab === 'tecnico' ? 'var(--primary)' : '#666', borderBottom: activeTab === 'tecnico' ? '2px solid var(--primary)' : 'none', paddingBottom: '5px' }}>Consumo Técnico</h3>
+                    <h3 onClick={() => setActiveTab('cierre')} style={{ margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', color: activeTab === 'cierre' ? 'var(--primary)' : '#666', borderBottom: activeTab === 'cierre' ? '2px solid var(--primary)' : 'none', paddingBottom: '5px' }}>Cierre Mensual</h3>
                 </div>
 
-                {activeTab === 'tecnico' ? (
-                    <ReporteTecnicoView />
-                ) : (
-                    <DataTable
-                        columns={activeTab === 'sla' ? slaColumns : consumoColumns}
-                        data={activeTab === 'sla' ? slaData : consumoData}
-                        loading={loading}
-                        title={activeTab === 'sla' ? "Historial de cumplimiento de tiempos" : "Detalle de materiales consumidos por proyecto"}
-                        allowExport={true}
-                    />
-                )}
+                <div style={{ padding: '20px' }}>
+                    {activeTab === 'tecnico' && <ReporteTecnicoView />}
+                    {activeTab === 'cierre' && <CierreMesView />}
+
+                    {(activeTab === 'sla' || activeTab === 'consumo') && (
+                        <DataTable
+                            columns={activeTab === 'sla' ? slaColumns : consumoColumns}
+                            data={activeTab === 'sla' ? slaData : consumoData}
+                            loading={loading}
+                            title={activeTab === 'sla' ? "Historial de cumplimiento de tiempos" : "Detalle de materiales consumidos por proyecto"}
+                            allowExport={true}
+                        />
+                    )}
+                </div>
             </div>
         </div>
     );
