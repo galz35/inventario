@@ -288,4 +288,41 @@ export async function actualizarOT(idOT: number, dto: any, idUsuarioResponsable:
   await logOTHistory(idOT, 'ACTUALIZACION', 'NO_CHANGE', 'Actualización de datos', idUsuarioResponsable, JSON.stringify(dto));
 }
 
+async function logOTHistory(idOT: number, accion: string, estado: string, notas: string, idUsuario: number | null, detalles?: string) {
+  try {
+    const query = `
+            INSERT INTO Inv_ope_ot_historial (idOT, accion, estado, notas, idUsuario, fecha, cambios)
+            VALUES (@idOT, @accion, @estado, @notas, @idUsuario, GETDATE(), @detalles)
+        `;
+    const request = await crearRequest();
+    request.input('idOT', Int, idOT);
+    request.input('accion', NVarChar, accion);
+    request.input('estado', NVarChar, estado);
+    request.input('notas', NVarChar, notas);
+    request.input('idUsuario', Int, idUsuario);
+    request.input('detalles', NVarChar, detalles || null);
+    await request.query(query);
+  } catch (e) {
+    console.warn('Error logging OT history (Table might be missing)', e);
+  }
+}
+
+export async function getHistorialOT(idOT: number) {
+  try {
+    const query = `
+            SELECT h.*, u.nombre as usuarioNombre 
+            FROM Inv_ope_ot_historial h
+            LEFT JOIN Inv_seg_usuarios u ON h.idUsuario = u.idUsuario
+            WHERE h.idOT = @idOT
+            ORDER BY h.fecha DESC
+        `;
+    const request = await crearRequest();
+    request.input('idOT', Int, idOT);
+    const res = await request.query(query);
+    return res.recordset;
+  } catch (e) {
+    return [];
+  }
+}
+
 
