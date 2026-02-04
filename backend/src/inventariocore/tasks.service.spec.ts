@@ -3,9 +3,10 @@ import { TasksService } from './tasks.service';
 import { PlanningService } from '../planning/planning.service';
 import { AuditService } from '../common/audit.service';
 import { VisibilidadService } from '../acceso/visibilidad.service';
+import { RecurrenciaService } from './recurrencia.service';
 
 // Mock de Repositorios (estos son módulos, no clases inyectadas)
-jest.mock('./InventarioCore.repo', () => ({
+jest.mock('./inventariocore.repo', () => ({
   obtenerCheckinPorFecha: jest.fn(),
   obtenerMisTareas: jest.fn(),
   upsertCheckin: jest.fn(),
@@ -16,6 +17,8 @@ jest.mock('./InventarioCore.repo', () => ({
   bloquearTarea: jest.fn(),
   resolverBloqueo: jest.fn(),
   ejecutarQuery: jest.fn(),
+  getTareasUsuario: jest.fn(),
+  obtenerBacklog: jest.fn(),
 }));
 
 jest.mock('../planning/planning.repo', () => ({
@@ -33,10 +36,17 @@ jest.mock('../auth/auth.repo', () => ({
   obtenerUsuarioPorId: jest.fn(),
 }));
 
+jest.mock('./tasks.repo', () => ({
+  recalcularJerarquia: jest.fn(),
+  crearAvance: jest.fn(),
+  crearTarea: jest.fn(),
+}));
+
 // Importar los mocks para poder configurar sus retornos
-import * as InventarioCoreRepo from './InventarioCore.repo';
+import * as InventarioCoreRepo from './inventariocore.repo';
 import * as planningRepo from '../planning/planning.repo';
 import * as authRepo from '../auth/auth.repo';
+import * as tasksRepo from './tasks.repo';
 
 describe('TasksService', () => {
   let service: TasksService;
@@ -57,6 +67,12 @@ describe('TasksService', () => {
   const mockVisibilidadService = {
     verificarAccesoPorId: jest.fn(),
     obtenerEmpleadosVisibles: jest.fn(),
+    obtenerCarnetPorId: jest.fn(),
+  };
+
+  const mockRecurrenciaService = {
+    generarRecurrencias: jest.fn(),
+    obtenerAgendaRecurrente: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -68,6 +84,7 @@ describe('TasksService', () => {
         { provide: PlanningService, useValue: mockPlanningService },
         { provide: AuditService, useValue: mockAuditService },
         { provide: VisibilidadService, useValue: mockVisibilidadService },
+        { provide: RecurrenciaService, useValue: mockRecurrenciaService },
       ],
     }).compile();
 
@@ -85,12 +102,20 @@ describe('TasksService', () => {
     it('should return day snapshot', async () => {
       const mockCheckin = { idCheckin: 1, entregableTexto: 'Test' };
       const mockTareas = [{ idTarea: 1, titulo: 'Task 1' }];
+      const mockAgenda = [{ id: 1, titulo: 'Rec' }];
+      const mockBacklog = [{ idTarea: 2, titulo: 'Backlog' }];
 
       (
         InventarioCoreRepo.obtenerCheckinPorFecha as jest.Mock
       ).mockResolvedValue(mockCheckin);
-      (InventarioCoreRepo.obtenerMisTareas as jest.Mock).mockResolvedValue(
+      (InventarioCoreRepo.getTareasUsuario as jest.Mock).mockResolvedValue(
         mockTareas,
+      );
+      (InventarioCoreRepo.obtenerBacklog as jest.Mock).mockResolvedValue(
+        mockBacklog,
+      );
+      mockRecurrenciaService.obtenerAgendaRecurrente.mockResolvedValue(
+        mockAgenda,
       );
 
       const result = await service.miDiaGet(1, '2024-01-23');
@@ -103,7 +128,8 @@ describe('TasksService', () => {
   describe('tareaCrearRapida', () => {
     it('should create and assign a task', async () => {
       const dto = { idUsuario: 1, titulo: 'New Task', idProyecto: 5 };
-      (InventarioCoreRepo.crearTarea as jest.Mock).mockResolvedValue(100);
+      mockVisibilidadService.obtenerCarnetPorId.mockResolvedValue('C1');
+      (tasksRepo.crearTarea as jest.Mock).mockResolvedValue(100);
       (planningRepo.obtenerTareaPorId as jest.Mock).mockResolvedValue({
         idTarea: 100,
         nombre: 'New Task',
@@ -111,11 +137,7 @@ describe('TasksService', () => {
 
       const result = await service.tareaCrearRapida(dto as any);
 
-      expect(InventarioCoreRepo.crearTarea).toHaveBeenCalled();
-      expect(InventarioCoreRepo.asignarUsuarioTarea).toHaveBeenCalledWith(
-        100,
-        1,
-      );
+      expect(tasksRepo.crearTarea).toHaveBeenCalled();
       expect(result.idTarea).toBe(100);
     });
   });

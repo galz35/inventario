@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { AuditService } from '../common/audit.service';
 
 // Mock bcrypt
 jest.mock('bcrypt', () => ({
@@ -79,6 +80,9 @@ describe('AuthService', () => {
   const mockJwtService = {
     signAsync: jest.fn(),
   };
+  const mockAuditService = {
+    log: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -87,6 +91,7 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: JwtService, useValue: mockJwtService },
+        { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
 
@@ -246,12 +251,13 @@ describe('AuthService', () => {
 
       expect(mockJwtService.signAsync).toHaveBeenCalledWith(
         expect.objectContaining({
+          carnet: 'E123456',
           correo: 'test@example.com',
           sub: 1,
           userId: 1,
           rol: 'User',
         }),
-        expect.objectContaining({ expiresIn: '1h' }),
+        expect.objectContaining({ expiresIn: '12h' }),
       );
     });
   });

@@ -7,12 +7,14 @@ import {
 } from '@nestjs/common';
 import * as planningRepo from './planning.repo';
 import * as authRepo from '../auth/auth.repo';
+import * as tasksRepo from '../inventariocore/tasks.repo';
 import { AuditService } from '../common/audit.service';
 import { VisibilidadService } from '../acceso/visibilidad.service';
 
 // Mock de módulos de repositorio
 jest.mock('./planning.repo');
 jest.mock('../auth/auth.repo');
+jest.mock('../inventariocore/tasks.repo');
 
 describe('PlanningService', () => {
   let service: PlanningService;
@@ -160,12 +162,11 @@ describe('PlanningService', () => {
       expect(planningRepo.crearSolicitudCambio).toHaveBeenCalledWith(
         expect.objectContaining({
           idTarea: 1,
-          idUsuarioSolicitante: 10,
-          campoAfectado: 'fechaObjetivo',
+          idUsuario: 10,
+          campo: 'fechaObjetivo',
           valorAnterior: '2024-01-15',
           valorNuevo: '2024-02-15',
           motivo: 'Need more time',
-          estado: 'Pendiente',
         }),
       );
     });
@@ -185,7 +186,7 @@ describe('PlanningService', () => {
       idSolicitud: 1,
       estado: 'Pendiente',
       idTarea: 10,
-      campoAfectado: 'fechaObjetivo',
+      campo: 'fechaObjetivo',
       valorNuevo: '2024-03-01',
     };
 
@@ -197,21 +198,25 @@ describe('PlanningService', () => {
       (planningRepo.obtenerSolicitudPorId as jest.Mock).mockResolvedValue(
         pendingSolicitud,
       );
-      (planningRepo.actualizarTarea as jest.Mock).mockResolvedValue({});
-      (planningRepo.actualizarEstadoSolicitud as jest.Mock).mockResolvedValue(
+      (planningRepo.obtenerTareaPorId as jest.Mock).mockResolvedValue({
+        idTarea: 10,
+        nombre: 'Tarea',
+      });
+      (tasksRepo.actualizarTarea as jest.Mock).mockResolvedValue({});
+      (planningRepo.resolverSolicitud as jest.Mock).mockResolvedValue(
         {},
       );
 
       const result = await service.resolverSolicitud(5, 1, 'Aprobar');
 
-      expect(planningRepo.actualizarTarea).toHaveBeenCalledWith(10, {
+      expect(tasksRepo.actualizarTarea).toHaveBeenCalledWith(10, {
         fechaObjetivo: '2024-03-01',
       });
-      expect(planningRepo.actualizarEstadoSolicitud).toHaveBeenCalledWith(
+      expect(planningRepo.resolverSolicitud).toHaveBeenCalledWith(
         1,
         'Aprobado',
-        expect.any(String),
         5,
+        expect.any(String),
       );
       expect(auditService.log).toHaveBeenCalled();
     });
@@ -221,18 +226,19 @@ describe('PlanningService', () => {
         idUsuario: 5,
         rolGlobal: 'Admin',
       });
-      (planningRepo.actualizarEstadoSolicitud as jest.Mock).mockResolvedValue(
-        {},
+      (planningRepo.obtenerSolicitudPorId as jest.Mock).mockResolvedValue(
+        pendingSolicitud,
       );
+      (planningRepo.resolverSolicitud as jest.Mock).mockResolvedValue({});
 
       const result = await service.resolverSolicitud(5, 1, 'Rechazar');
 
-      expect(planningRepo.actualizarTarea).not.toHaveBeenCalled();
-      expect(planningRepo.actualizarEstadoSolicitud).toHaveBeenCalledWith(
+      expect(tasksRepo.actualizarTarea).not.toHaveBeenCalled();
+      expect(planningRepo.resolverSolicitud).toHaveBeenCalledWith(
         1,
         'Rechazado',
-        expect.any(String),
         5,
+        expect.any(String),
       );
     });
 
@@ -259,13 +265,13 @@ describe('PlanningService', () => {
         proyectoTipo: 'Operativo',
       };
       (planningRepo.obtenerTareaPorId as jest.Mock).mockResolvedValue(task);
-      (planningRepo.actualizarTarea as jest.Mock).mockResolvedValue({});
+      (tasksRepo.actualizarTarea as jest.Mock).mockResolvedValue({});
 
       const result = await service.updateTareaOperativa(10, 1, {
         nombre: 'Updated',
       });
 
-      expect(planningRepo.actualizarTarea).toHaveBeenCalledWith(1, {
+      expect(tasksRepo.actualizarTarea).toHaveBeenCalledWith(1, {
         nombre: 'Updated',
       });
     });
