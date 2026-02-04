@@ -33,7 +33,7 @@ Este documento guía al evaluador a través de los diferentes roles y funciones 
 ---
 
 ### 3. 🛠️ CARLOS PAREDES (Técnico de Campo)
-**Email:** `c` (Acceso rápido) o `carlos.paredes@empresa.com`
+**Email:** `c` (Acceso rápido) o `p`
 *Ejecuta los trabajos y consume materiales.*
 
 *   **Pestaña [Operaciones]:**
@@ -41,11 +41,11 @@ Este documento guía al evaluador a través de los diferentes roles y funciones 
     *   Registra el consumo de materiales (ej. 2 conectores SC y 1 ONT).
     *   **Cierra la OT:** Firma digitalmente y descarga el comprobante de cierre.
 *   **Pestaña [Activos]:** Revisa "Mis Herramientas" para confirmar que tiene el equipo que Miguel le asignó.
-
+gustavo@empresa.com
 ---
 
 ### 4. 📦 ROBERTO CENTRAL (Jefe de Bodega)
-**Email:** `roberto.central@empresa.com`
+**Email:** `roberto.central@empresa.com` ana.norte@empresa.com
 *Gestiona las entradas y salidas de materiales.*
 
 *   **Pestaña [Inventario]:** 
