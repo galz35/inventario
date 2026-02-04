@@ -146,9 +146,7 @@ class InventoryService {
         return api.get('/inv/inventario/historia', { params: { productoId, almacenId } });
     }
 
-    async getActivos() {
-        return api.get('/inv/activos'); // Assuming this endpoint exists or will exist
-    }
+
 
     async getHistorialActivo(id: number) {
         return api.get(`/inv/activos/${id}/historial`);
@@ -234,6 +232,10 @@ class OperationsService {
     async getHistorialOT(idOT: number) {
         return api.get(`/inv/operaciones/ot/${idOT}/historial`);
     }
+
+    async getEvidencias(idOT: number) {
+        return api.get(`/inv/operaciones/ot/${idOT}/evidencias`);
+    }
 }
 
 // Planning Service (Tasks)
@@ -307,6 +309,10 @@ class VehiculosService {
 class ActivosService {
     async buscarActivo(serial: string) {
         return api.get(`/inv/activos/buscar?serial=${serial}`);
+    }
+
+    async getActivos(params?: { q?: string, estado?: string }) {
+        return api.get('/inv/activos', { params });
     }
 }
 

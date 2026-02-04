@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { authService, invService, opeService } from '../../services/api.service';
+import { authService, opeService, activosService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { alertSuccess, alertError } from '../../services/alert.service';
@@ -90,7 +90,7 @@ export const SystemUsersView = () => {
         setLoadingProfile(true);
         try {
             // Fetch Tools
-            const assetsRes = await invService.getActivos();
+            const assetsRes = await activosService.getActivos();
             let assetsRaw = assetsRes.data?.data || assetsRes.data || [];
             if (assetsRaw.data) assetsRaw = assetsRaw.data; // Safety deep extraction
 

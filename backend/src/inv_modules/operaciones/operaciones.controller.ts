@@ -64,27 +64,48 @@ export class OperacionesController {
     @Param('id') id: string,
     @Body() body: { base64: string; tipo: string },
   ) {
-    // Real implementation of file saving
     const uploadDir = path.resolve('uploads', 'ot_evidencias');
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
-    const fileName = `OT_${id}_${Date.now()}.jpg`;
+    // Detect format from base64 header or default to jpg (or webp if user converts it)
+    let ext = 'jpg';
+    if (body.base64.startsWith('data:image/webp')) ext = 'webp';
+    else if (body.base64.startsWith('data:image/png')) ext = 'png';
+    else if (body.base64.startsWith('data:application/pdf')) ext = 'pdf';
+
+    const fileName = `OT_${id}_${Date.now()}.${ext}`;
     const filePath = path.join(uploadDir, fileName);
 
-    // Remove header if present (data:image/jpeg;base64,...)
-    const base64Data = body.base64.replace(/^data:image\/\w+;base64,/, '');
+    // Remove header
+    const base64Data = body.base64.replace(/^data:\w+\/\w+;base64,/, '');
 
     fs.writeFileSync(filePath, base64Data, 'base64');
 
-    // Here we should check if we store full path or relative
-    // For now, return success
     return {
       message: 'Evidencia guardada',
       url: `/uploads/ot_evidencias/${fileName}`,
+      nombre: fileName
     };
   }
+
+  @Get('ot/:id/evidencias')
+  async listarEvidencias(@Param('id') id: string) {
+    const uploadDir = path.resolve('uploads', 'ot_evidencias');
+    if (!fs.existsSync(uploadDir)) return [];
+
+    const files = fs.readdirSync(uploadDir);
+    // Filter files starting with OT_{id}_
+    const otFiles = files.filter(f => f.startsWith(`OT_${id}_`));
+
+    return otFiles.map(f => ({
+      nombre: f,
+      url: `/uploads/ot_evidencias/${f}`,
+      fecha: fs.statSync(path.join(uploadDir, f)).mtime
+    }));
+  }
+
 
 
   @Post('ot/:id/asignar')

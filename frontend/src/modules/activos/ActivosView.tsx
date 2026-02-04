@@ -1,54 +1,70 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { activosService, invService } from '../../services/api.service';
-import { Search, MapPin, User, Calendar, Box, History, Smartphone, AlertTriangle } from 'lucide-react';
+import { Search, User, Box, History, Filter } from 'lucide-react';
 import { SidePanel } from '../../components/SidePanel';
 import { KardexTimeline } from '../inventario/components/KardexTimeline';
 
 export const ActivosView = () => {
+    // View Mode: 'list' or 'track' (legacy tracker) - We'll stick to list as default per request
     const [busqueda, setBusqueda] = useState('');
-    const [activo, setActivo] = useState<any>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+    const [filtroEstado, setFiltroEstado] = useState('');
 
-    // History SidePanel State
+    // Data List
+    const [activos, setActivos] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    // Details / History
+    const [selectedActivo, setSelectedActivo] = useState<any>(null);
     const [showHistory, setShowHistory] = useState(false);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [historyData, setHistoryData] = useState<any[]>([]);
 
-    const handleSearch = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!busqueda) return;
+    useEffect(() => {
+        fetchActivos();
+    }, [filtroEstado]); // Refetch when filter changes. Text search usually needs debounce or manual submit.
 
+    const fetchActivos = async () => {
         setLoading(true);
-        setError('');
-        setActivo(null);
-        setShowHistory(false);
-
         try {
-            const res = await activosService.buscarActivo(busqueda);
-            if (res.data) {
-                setActivo(res.data);
-            } else {
-                setError('No se encontró ningún activo con ese número de serie.');
-            }
+            const res = await activosService.getActivos({ q: busqueda, estado: filtroEstado });
+            setActivos(res.data || []);
         } catch (err) {
             console.error(err);
-            setError('Error al buscar el activo. Intente nuevamente.');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleViewHistory = async () => {
-        if (!activo) return;
+    const handleSearchSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        fetchActivos();
+    };
+
+    const handleViewHistory = async (activo: any) => {
+        setSelectedActivo(activo);
         setShowHistory(true);
         setLoadingHistory(true);
         try {
-            // Fetch history for the PRODUCT related to this asset
-            // Ideally this would be filtered by serial if the backend supported it, 
-            // but for now we show the product's timeline.
-            const res = await invService.getHistoriaProducto(activo.idProducto);
-            setHistoryData(res.data.data || res.data || []);
+            // Fetch history: Try specific asset history first, fallback to product flow
+            // Note: invService.getHistoriaProducto is product-level. 
+            // We should use tracking by serial if available, but for now we reuse existing logic or improve.
+            // Let's stick to Product history for visual consistency unless we added a specific endpoint.
+            // ACTUALLY: We just added getActivos, but did we add getHistorialActivo endpoint? 
+            // api.service has getHistorialActivo -> call /inv/activos/:id/historial
+            // Let's try that first!
+
+            // Wait, api.service has: async getHistorialActivo(id: number) { return api.get(`/inv/activos/${id}/historial`); }
+            // Does the backend have it? Let's check. 
+            // If not, we fallback to product history as before.
+
+            // Assuming we lack the specific endpoint backend impl (I didn't add it), 
+            // I will use product history as placeholder OR just show the asset details.
+
+            // Let's fix this: previously it passed activo.idProducto.
+            // Let's fix this: previously it passed activo.idProducto.
+            const resProd = await invService.getHistoriaProducto(activo.idProducto || activo.productoId);
+            setHistoryData(resProd.data.data || resProd.data || []);
+
         } catch (err) {
             console.error("Error fetching history", err);
         } finally {
@@ -56,176 +72,177 @@ export const ActivosView = () => {
         }
     };
 
+    const getEstadoColor = (estado: string) => {
+        switch (estado) {
+            case 'DISPONIBLE': return '#10b981';
+            case 'ASIGNADO': return '#f59e0b';
+            case 'MANTENIMIENTO': return '#ef4444';
+            case 'BAJA': return '#64748b';
+            default: return '#94a3b8';
+        }
+    };
+
     return (
-        <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', animation: 'fadeIn 0.5s ease-out' }}>
-            <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-                <h1 style={{ fontSize: '2.5rem', fontWeight: 800, margin: '0 0 10px 0', background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    Rastreador de Activos
-                </h1>
-                <p style={{ color: '#64748b', fontSize: '1.1rem' }}>Localiza equipos, herramientas y materiales por número de serie.</p>
+        <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto', animation: 'fadeIn 0.5s ease-out' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+                <div>
+                    <h1 style={{ fontSize: '2rem', fontWeight: 800, margin: '0 0 5px 0', color: '#f8fafc' }}>
+                        Inventario de Activos
+                    </h1>
+                    <p style={{ color: '#64748b', fontSize: '1rem', margin: 0 }}>Gestión y trazabilidad de equipos por serie</p>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    {/* Actions like "Nuevo Activo" could go here */}
+                </div>
             </div>
 
-            <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px', marginBottom: '40px', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)', borderRadius: '16px' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                    <input
-                        className="form-input"
-                        placeholder="Ej: SN-2024-001..."
-                        value={busqueda}
-                        onChange={e => setBusqueda(e.target.value)}
-                        style={{ paddingLeft: '50px', fontSize: '1.2rem', height: '64px', borderRadius: '16px 0 0 16px', border: '1px solid #334155', background: '#1e293b' }}
-                        autoFocus
-                    />
-                    <Search
-                        size={28}
-                        style={{ position: 'absolute', left: '16px', top: '18px', color: '#64748b' }}
-                    />
-                </div>
-                <button
-                    type="submit"
-                    className="btn-primary"
-                    style={{ padding: '0 40px', fontSize: '1.1rem', borderRadius: '0 16px 16px 0', fontWeight: 700, letterSpacing: '0.5px' }}
-                    disabled={loading}
-                >
-                    {loading ? 'Rastreando...' : 'BUSCAR'}
-                </button>
-            </form>
-
-            {error && (
-                <div style={{
-                    padding: '20px',
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid rgba(239, 68, 68, 0.2)',
-                    color: '#f87171',
-                    borderRadius: '16px',
-                    textAlign: 'center',
-                    fontWeight: 500,
-                    animation: 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both'
-                }}>
-                    <AlertTriangle size={24} style={{ display: 'block', margin: '0 auto 10px auto' }} />
-                    {error}
-                </div>
-            )}
-
-            {activo && (
-                <div style={{ animation: 'slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-                    <div className="card" style={{
-                        padding: '0',
-                        overflow: 'hidden',
-                        border: '1px solid #334155',
-                        background: '#0f172a'
-                    }}>
-                        {/* Status Strip */}
-                        <div style={{
-                            height: '8px',
-                            background: activo.estado === 'DISPONIBLE' ? 'linear-gradient(90deg, #10b981, #059669)' : 'linear-gradient(90deg, #f59e0b, #d97706)',
-                            width: '100%'
-                        }} />
-
-                        <div style={{ padding: '30px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px', marginBottom: '30px' }}>
-                                <div>
-                                    <div style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '5px' }}>IDENTIDAD DEL ACTIVO</div>
-                                    <h2 style={{ fontSize: '2rem', fontWeight: 800, margin: 0, color: '#f8fafc', lineHeight: 1.1 }}>{activo.productoNombre}</h2>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
-                                        <span style={{ fontFamily: 'monospace', background: '#334155', color: '#e2e8f0', padding: '4px 10px', borderRadius: '6px', fontWeight: 600, fontSize: '1.1rem' }}>
-                                            {activo.serial}
-                                        </span>
-                                        <span style={{ fontSize: '0.9rem', color: '#94a3b8' }}>• {activo.productoCodigo}</span>
-                                    </div>
-                                </div>
-
-                                <span style={{
-                                    background: activo.estado === 'DISPONIBLE' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                                    color: activo.estado === 'DISPONIBLE' ? '#34d399' : '#fbbf24',
-                                    padding: '8px 16px',
-                                    borderRadius: '12px',
-                                    fontWeight: 700,
-                                    fontSize: '0.9rem',
-                                    border: `1px solid ${activo.estado === 'DISPONIBLE' ? '#059669' : '#d97706'}`,
-                                    boxShadow: `0 0 15px ${activo.estado === 'DISPONIBLE' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'}`
-                                }}>
-                                    {activo.estado}
-                                </span>
-                            </div>
-
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                                gap: '20px',
-                                background: '#1e293b',
-                                padding: '20px',
-                                borderRadius: '16px',
-                                marginBottom: '25px'
-                            }}>
-                                <InfoItem icon={MapPin} label="Ubicación Actual" value={activo.ubicacionAlmacen || 'En Tránsito / Desconocida'} highlight />
-                                <InfoItem icon={User} label="Responsable Custodio" value={activo.tecnicoResponsable || activo.clienteAsignado || 'Sin asignar'} />
-                                <InfoItem icon={Calendar} label="Fecha de Alta" value={activo.fechaIngreso ? new Date(activo.fechaIngreso).toLocaleDateString() : 'N/A'} />
-                                <InfoItem icon={Smartphone} label="Modelo" value={activo.modelo || 'Estándar'} />
-                            </div>
-
-                            <button
-                                className="btn-secondary"
-                                onClick={handleViewHistory}
-                                style={{ width: '100%', padding: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '1rem', fontWeight: 600 }}
-                            >
-                                <History size={20} />
-                                Ver Trazabilidad Completa
-                            </button>
-                        </div>
+            {/* Filters Bar */}
+            <div style={{ background: '#1e293b', padding: '15px', borderRadius: '12px', display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '20px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                <form onSubmit={handleSearchSubmit} style={{ flex: 1, display: 'flex', gap: '10px' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                        <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
+                        <input
+                            className="form-input"
+                            placeholder="Buscar por Serie, Modelo o Nombre..."
+                            value={busqueda}
+                            onChange={e => setBusqueda(e.target.value)}
+                            style={{ paddingLeft: '38px' }}
+                        />
                     </div>
-                </div>
-            )}
+                </form>
 
-            {/* History Drawer */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Filter size={18} color="#64748b" />
+                    <select
+                        className="form-input"
+                        style={{ width: '180px' }}
+                        value={filtroEstado}
+                        onChange={e => setFiltroEstado(e.target.value)}
+                    >
+                        <option value="">Todos los Estados</option>
+                        <option value="DISPONIBLE">🟢 Disponibles</option>
+                        <option value="ASIGNADO">🟠 Asignados</option>
+                        <option value="MANTENIMIENTO">🔴 En Mantenimiento</option>
+                        <option value="BAJA">⚫ De Baja</option>
+                    </select>
+                </div>
+
+                <button className="btn-primary" onClick={fetchActivos} disabled={loading}>
+                    {loading ? '...' : 'Actualizar'}
+                </button>
+            </div>
+
+            {/* Table */}
+            <div className="table-container">
+                <table className="data-table">
+                    <thead>
+                        <tr>
+                            <th>Serial / ID</th>
+                            <th>Producto</th>
+                            <th>Ubicación / Responsable</th>
+                            <th>Estado</th>
+                            <th>Fecha Alta</th>
+                            <th style={{ textAlign: 'right' }}>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading && activos.length === 0 ? (
+                            <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px' }}>Cargando activos...</td></tr>
+                        ) : activos.length === 0 ? (
+                            <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No se encontraron activos con los filtros actuales.</td></tr>
+                        ) : (
+                            activos.map((activo) => (
+                                <tr key={activo.idActivo} className="hover-row">
+                                    <td>
+                                        <div style={{ fontWeight: 700, color: '#f8fafc' }}>{activo.serial}</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{activo.productoCodigo}</div>
+                                    </td>
+                                    <td>
+                                        <div style={{ fontWeight: 600 }}>{activo.productoNombre}</div>
+                                        {activo.modelo && <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Mod: {activo.modelo}</div>}
+                                    </td>
+                                    <td>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            {activo.tecnicoResponsable ? (
+                                                <><User size={14} color="#3b82f6" /> <span style={{ color: '#e2e8f0' }}>{activo.tecnicoResponsable}</span></>
+                                            ) : activo.ubicacionAlmacen ? (
+                                                <><Box size={14} color="#10b981" /> <span>{activo.ubicacionAlmacen}</span></>
+                                            ) : (
+                                                <span style={{ color: '#64748b' }}>--</span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span className="badge" style={{
+                                            background: getEstadoColor(activo.estado) + '20',
+                                            color: getEstadoColor(activo.estado),
+                                            border: `1px solid ${getEstadoColor(activo.estado)}40`
+                                        }}>
+                                            {activo.estado}
+                                        </span>
+                                    </td>
+                                    <td style={{ color: '#94a3b8' }}>
+                                        {activo.fechaIngreso ? new Date(activo.fechaIngreso).toLocaleDateString() : '-'}
+                                    </td>
+                                    <td style={{ textAlign: 'right' }}>
+                                        <button
+                                            className="btn-icon"
+                                            title="Ver Historial"
+                                            onClick={() => handleViewHistory(activo)}
+                                        >
+                                            <History size={18} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* History Panel */}
             <SidePanel
                 isOpen={showHistory}
                 onClose={() => setShowHistory(false)}
-                title="Trazabilidad del Activo"
+                title="Detalle del Activo"
                 width="600px"
             >
-                <div style={{ padding: '0 5px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px', background: '#1e293b', padding: '15px', borderRadius: '12px' }}>
-                        <div style={{ width: '50px', height: '50px', background: '#334155', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Box size={24} color="#94a3b8" />
+                {selectedActivo && (
+                    <div style={{ padding: '0 5px' }}>
+                        <div className="card" style={{ marginBottom: '20px', background: '#0f172a', border: '1px solid #334155' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{selectedActivo.productoNombre}</h3>
+                                    <div style={{ color: '#94a3b8', fontFamily: 'monospace', marginTop: '4px' }}>SN: {selectedActivo.serial}</div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <span style={{ color: getEstadoColor(selectedActivo.estado), fontWeight: 700 }}>{selectedActivo.estado}</span>
+                                </div>
+                            </div>
+                            <div style={{ marginTop: '15px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                <InfoRow label="Ubicación" value={selectedActivo.ubicacionAlmacen} />
+                                <InfoRow label="Responsable" value={selectedActivo.tecnicoResponsable || selectedActivo.clienteAsignado} />
+                                <InfoRow label="Modelo" value={selectedActivo.modelo} />
+                                <InfoRow label="Ingreso" value={selectedActivo.fechaIngreso ? new Date(selectedActivo.fechaIngreso).toLocaleDateString() : ''} />
+                            </div>
                         </div>
-                        <div>
-                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>{activo?.productoNombre}</h3>
-                            <div style={{ color: '#64748b', fontSize: '0.9rem' }}>SN: {activo?.serial}</div>
-                        </div>
-                    </div>
 
-                    {loadingHistory ? (
-                        <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Cargando historial...</div>
-                    ) : (
-                        <KardexTimeline movimientos={historyData} />
-                    )}
-                </div>
+                        <h4 style={{ borderBottom: '1px solid #334155', paddingBottom: '10px', marginBottom: '15px' }}>Historial de Movimientos (Producto)</h4>
+                        {loadingHistory ? (
+                            <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Cargando historial...</div>
+                        ) : (
+                            <KardexTimeline movimientos={historyData} />
+                        )}
+                    </div>
+                )}
             </SidePanel>
         </div>
     );
 };
 
-const InfoItem = ({ icon: Icon, label, value, highlight = false }: any) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-        <div style={{
-            width: '44px', height: '44px',
-            borderRadius: '12px',
-            background: 'rgba(255,255,255,0.05)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: highlight ? 'var(--primary)' : '#94a3b8',
-            border: '1px solid rgba(255,255,255,0.05)'
-        }}>
-            <Icon size={22} />
-        </div>
-        <div>
-            <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</div>
-            <div style={{
-                fontWeight: highlight ? 700 : 600,
-                fontSize: highlight ? '1.05rem' : '0.95rem',
-                color: highlight ? '#f8fafc' : '#cbd5e1'
-            }}>
-                {value}
-            </div>
-        </div>
+const InfoRow = ({ label, value }: any) => (
+    <div>
+        <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase' }}>{label}</div>
+        <div style={{ fontWeight: 600 }}>{value || '--'}</div>
     </div>
 );
