@@ -1,0 +1,25 @@
+CREATE TABLE [dbo].[Inv_ope_ot] (
+    [idOT] int IDENTITY(1,1) NOT NULL,
+    [idProyecto] int NULL,
+    [idTecnicoAsignado] int NULL,
+    [clienteNombre] nvarchar(150) NULL,
+    [clienteDireccion] nvarchar(max) NULL,
+    [tipoOT] nvarchar(50) NULL,
+    [prioridad] nvarchar(20) NULL DEFAULT ('MEDIA'),
+    [estado] nvarchar(20) NULL DEFAULT ('REGISTRADA'),
+    [fechaAsignacion] datetime NULL,
+    [fechaInicio] datetime NULL,
+    [fechaCierre] datetime NULL,
+    [notas] nvarchar(max) NULL,
+    [fechaCreacion] datetime NULL DEFAULT (getdate()),
+    [idTareaWBS] int NULL,
+    [idUsuarioCrea] int NULL,
+    [numeroCliente] nvarchar(50) NULL,
+    [contactoNombre] nvarchar(100) NULL,
+    [telefono] nvarchar(50) NULL,
+    [correo] nvarchar(100) NULL,
+    [descripcionTrabajo] nvarchar(max) NULL,
+    [clienteNombreManual] nvarchar(200) NULL,
+    [idCliente] int NULL
+);
+GO

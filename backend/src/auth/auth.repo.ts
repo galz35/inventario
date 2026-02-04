@@ -41,7 +41,7 @@ export async function obtenerUsuarioPorIdentificador(
             r.reglas
         FROM Inv_seg_usuarios u
         LEFT JOIN Inv_seg_roles r ON u.idRol = r.idRol
-        WHERE (u.correo = @identificador OR u.carnet = @identificador)
+        WHERE (LOWER(u.correo) = LOWER(@identificador) OR LOWER(u.carnet) = LOWER(@identificador))
           AND u.activo = 1
     `);
 

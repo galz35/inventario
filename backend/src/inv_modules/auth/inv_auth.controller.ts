@@ -38,9 +38,8 @@ export class InvAuthController {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // 4. Invocar SP de Login (Pasando el HASH almacenado, no el texto plano)
-    // El SP hace: WHERE password = @password. Al pasar el mismo hash que está en BD, coincide.
-    const usuario = await authRepo.login(body.correo, creds.passwordHash);
+    // 4. Invocar SP de Login (Usando el correo real de la DB para evitar fallos por carnet/mayusculas)
+    const usuario = await authRepo.login(user.correo, creds.passwordHash);
 
     if (!usuario) {
       throw new UnauthorizedException('Credenciales inválidas o usuario inactivo');

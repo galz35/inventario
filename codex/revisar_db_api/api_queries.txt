@@ -1,0 +1,1579 @@
+SQL QUERIES FOUND IN BACKEND SOURCE CODE
+========================================
+
+[FILE: app.controller.ts]
+"
+    };
+  }
+
+  @Get('seed-test-tasks')
+  async seedTestTasks() {
+    return {
+      message: 'Seed endpoints deshabilitados. Usar scripts SQL directamente.',
+    };
+  }
+
+  @Get('seed-completed-tasks')
+  async seedCompletedTasks() {
+    return {
+      message: 'Seed endpoints deshabilitados. Usar scripts SQL directamente.',
+    };
+  }
+
+  @Get('seed-all-states')
+  async seedAllStates() {
+    return {
+      message: 'Seed endpoints deshabilitados. Usar scripts SQL directamente.',
+    };
+  }
+
+  @Get('rrhh-users')
+  async getRRHH() {
+    return { message: 'Endpoint legacy deshabilitado.' };
+  }
+
+  @Get('setup-db')
+  async setupDatabase() {
+    // Security: Disable in production to prevent accidental resets
+    if (process.env.NODE_ENV === 'production') {
+      this.logger.warn('Attempt to access setup-db in production environment.');
+      return { error: 'Endpoint unavailable in production environment.' };
+    }
+
+    try {
+      // Improved: Use relative path based on CWD or app root
+      // Tries to locate the file in probable locations
+      let sqlPath = path.resolve(process.cwd(), 'docs', 'diseno_db_fase1.sql');
+
+      if (!fs.existsSync(sqlPath)) {
+        // Fallback for different execution contexts
+        sqlPath = path.resolve(process.cwd(), '..', 'docs', 'diseno_db_fase1.sql');
+      }
+
+      if (!fs.existsSync(sqlPath)) {
+        this.logger.error(`SQL File Not Found at ${sqlPath}`);
+        return { error: 'SQL File Not Found. Please run in dev environment or verify docs path.' };
+      }
+
+      const content = fs.readFileSync(sqlPath, 'utf8');
+      const batches = content.split(/^GO/gm);
+
+      let success = 0;
+      let errors = 0;
+
+      for (const batch of batches) {
+        const q = batch.trim();
+        if (q) {
+          try {
+            await ejecutarQuery(q);
+            success++;
+          } catch (e: any) {
+            // Ignorar errores de existencia (idempotencia)
+            if (!JSON.stringify(e).includes('already exists') && !e.message?.includes('already exists')) {
+              this.logger.warn(`SetupDB Batch Error: ${e.message}`);
+              errors++;
+            }
+          }
+        }
+      }
+
+      // REPARACIÓN DE ESQUEMA (Fix Schema)
+      // Asegurar columnas críticas para Auth
+      const fixSchema = async (query: string) => {
+        try {
+          await ejecutarQuery(query);
+        } catch (e: any) {
+          this.logger.debug(`Schema fix skipped/failed: ${e.message}`);
+        }
+      };
+
+      await fixSchema('ALTER TABLE Inv_seg_usuarios ADD password NVARCHAR(255) NULL');
+      await fixSchema('ALTER TABLE Inv_seg_usuarios ADD refreshToken NVARCHAR(MAX) NULL');
+      await fixSchema('ALTER TABLE Inv_seg_usuarios ADD ultimoAcceso DATETIME NULL');
+      await fixSchema('ALTER TABLE Inv_seg_roles ADD esSistema BIT DEFAULT 0');
+      await fixSchema('ALTER TABLE Inv_seg_roles ADD reglas NVARCHAR(MAX) NULL');
+      await fixSchema('ALTER TABLE Inv_seg_roles ADD defaultMenu NVARCHAR(MAX) NULL');
+
+      // Seed User
+      // Crear rol admin si no existe
+      await ejecutarQuery(`
+            IF NOT EXISTS (SELECT 1 FROM Inv_seg_roles WHERE nombre = 'ADMIN')
+            INSERT INTO Inv_seg_roles (nombre, descripcion, esSistema, reglas) VALUES ('ADMIN', 'Admin', 1, '["
+
+[FILE: app.controller.ts]
+', 10);
+
+      await ejecutarQuery(`
+            DECLARE @idRolAdmin INT = (SELECT TOP 1 idRol FROM Inv_seg_roles WHERE nombre = '
+
+[FILE: app.controller.ts]
+');
+            
+            IF NOT EXISTS (SELECT 1 FROM Inv_seg_usuarios WHERE correo = '
+
+[FILE: app.controller.ts]
+';
+            END
+          `);
+
+      // Seed Datos Operativos (Para Tests)
+      await ejecutarQuery(`
+             -- Cliente Dummy
+             IF NOT EXISTS (SELECT 1 FROM Inv_cat_clientes WHERE nombre = '
+
+[FILE: app.controller.ts]
+', 1);
+
+             -- Tipo OT Dummy
+             IF NOT EXISTS (SELECT 1 FROM Inv_cat_tipos_ot WHERE nombre = '
+
+[FILE: app.controller.ts]
+', 0, 0, 1);
+
+             -- Proyecto Dummy
+             IF NOT EXISTS (SELECT 1 FROM Inv_ope_proyectos WHERE nombre = '
+
+[FILE: app.controller.ts]
+')
+             BEGIN
+                DECLARE @idUser INT = (SELECT TOP 1 idUsuario FROM Inv_seg_usuarios WHERE correo = '
+
+[FILE: auth\auth.repo.ts]
+', NVarChar, identificador);
+
+  // Nota: Inv_seg_usuarios tiene el password directamente.
+  // Mapeamos las columnas a lo que espera la app (UsuarioDb)
+  const result = await request.query<
+    UsuarioDb & {
+      rolNombre?: string;
+      rolDescripcion?: string;
+      esSistema?: boolean;
+      reglas?: string;
+    }
+  >(`
+        SELECT 
+            u.idUsuario,
+            u.nombre,
+            u.correo,
+            u.carnet,
+            u.activo,
+            u.idRol,
+            u.idAlmacenTecnico,
+            r.nombre as rolNombre,
+            r.descripcion as rolDescripcion,
+            r.esSistema,
+            r.reglas
+        FROM Inv_seg_usuarios u
+        LEFT JOIN Inv_seg_roles r ON u.idRol = r.idRol
+        WHERE (u.correo = @identificador OR u.carnet = @identificador)
+          AND u.activo = 1
+    `);
+
+  if (result.recordset.length === 0) return null;
+
+  const row = result.recordset[0];
+
+  // Mapear rol si existe
+  const usuario: UsuarioDb & { rol?: RolDb } = { ...row };
+  if (row.idRol) {
+    usuario.rol = {
+      idRol: row.idRol,
+      nombre: row.rolNombre || '
+
+[FILE: auth\auth.repo.ts]
+', Int, idUsuario);
+
+  try {
+    const result = await request.query<CredencialesDb>(`
+            SELECT idUsuario, password as passwordHash, refreshToken as refreshTokenHash, ultimoAcceso as ultimoLogin 
+            FROM Inv_seg_usuarios 
+            WHERE idUsuario = @idUsuario
+        `);
+    return result.recordset[0] || null;
+  } catch (e: any) {
+    logger.error(`Error obteniendo credenciales para usuario ${idUsuario}`, e);
+    // Propagate error so controller/service can handle it (e.g. 500 instead of 401 if DB fails)
+    throw e;
+  }
+}
+
+/**
+ * Actualiza el último login
+ */
+export async function actualizarUltimoLogin(idUsuario: number): Promise<void> {
+  const request = await crearRequest();
+  request.input('
+
+[FILE: auth\auth.repo.ts]
+', Int, idUsuario);
+
+  const result = await request.query<
+    UsuarioDb & {
+      rolNombre?: string;
+      rolDescripcion?: string;
+      esSistema?: boolean;
+      reglas?: string;
+    }
+  >(`
+        SELECT 
+            u.idUsuario,
+            u.nombre,
+            u.correo,
+            u.carnet,
+            u.activo,
+            u.idRol,
+            u.idAlmacenTecnico,
+            r.nombre as rolNombre,
+            r.descripcion as rolDescripcion,
+            r.esSistema,
+            r.reglas
+        FROM Inv_seg_usuarios u
+        LEFT JOIN Inv_seg_roles r ON u.idRol = r.idRol
+        WHERE u.idUsuario = @idUsuario
+    `);
+
+  if (result.recordset.length === 0) return null;
+
+  const row = result.recordset[0];
+  const usuario: UsuarioDb & { rol?: RolDb } = { ...row };
+
+  if (row.idRol) {
+    usuario.rol = {
+      idRol: row.idRol,
+      nombre: row.rolNombre || '
+
+[FILE: check_old_columns.ts]
+');
+    try {
+        const result = await ejecutarQuery(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_NAME = '
+
+[FILE: check_old_task_data.ts]
+');
+    try {
+        const result = await ejecutarQuery(`
+            SELECT TOP 5 idTarea, nombre, idProyecto FROM Inv_ope_proyecto_tareas ORDER BY idTarea DESC
+        `);
+        console.log('
+
+[FILE: check_task_columns.ts]
+');
+    try {
+        const result = await ejecutarQuery(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_NAME = '
+
+[FILE: check_task_data.ts]
+');
+    try {
+        const result = await ejecutarQuery(`
+            SELECT TOP 5 idTarea, nombre, idProyecto FROM Inv_ope_tareas ORDER BY idTarea DESC
+        `);
+        console.log('
+
+[FILE: common\audit.repo.ts]
+';
+  // Implementar filtros simples si se requieren
+  return await ejecutarQuery<LogSistemaDb>(`
+        SELECT * FROM Inv_sis_logs 
+        WHERE ${whereClause}
+        ORDER BY fecha DESC
+        OFFSET ${Math.floor(offset)} ROWS FETCH NEXT ${Math.floor(limit)} ROWS ONLY
+    `);
+}
+
+export async function contarLogsSistema(filtros: any = {}) {
+  const res = await ejecutarQuery<{ total: number }>(
+    `SELECT COUNT(*) as total FROM Inv_sis_logs`,
+  );
+  return res[0].total;
+}
+
+export async function listarAuditLogs(
+  limit: number,
+  offset: number,
+  filtros: any = {},
+) {
+  let whereClause = '
+
+[FILE: common\audit.repo.ts]
+`
+        SELECT a.*, u.nombre as nombreUsuario, u.correo as correoUsuario
+        FROM Inv_sis_auditoria a
+        LEFT JOIN Inv_seg_usuarios u ON a.idUsuario = u.idUsuario
+        WHERE ${whereClause}
+        ORDER BY a.fecha DESC
+        OFFSET ${Math.floor(offset)} ROWS FETCH NEXT ${Math.floor(limit)} ROWS ONLY
+    `
+
+[FILE: common\audit.repo.ts]
+`SELECT COUNT(*) as total FROM Inv_sis_auditoria`
+
+[FILE: fix_estimaciones.ts]
+');
+    try {
+        await ejecutarQuery(`
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = '
+
+[FILE: inv_modules\activos\activos.repo.ts]
+';
+
+/**
+ * Búsqueda Inteligente de Activo por Serial
+ * Busca coincidencia parcial o exacta en seriales.
+ */
+export async function buscarActivoPorSerie(serial: string) {
+  // Busca coincidencia parcial o exacta
+  // JOINs a productos, almacenes, tecnicos y clientes para dar contexto completo
+  return await ejecutarQuery(`
+        SELECT TOP 1
+            a.idActivo,
+            a.serial,
+            a.estado,
+            p.nombre as productoNombre,
+            p.codigo as productoCodigo,
+            alm.nombre as ubicacionAlmacen,
+            u.nombre as tecnicoResponsable,
+            c.nombre as clienteAsignado,
+            a.fechaIngreso
+        FROM Inv_act_activos a
+        JOIN Inv_cat_productos p ON a.idProducto = p.idProducto
+        LEFT JOIN Inv_cat_almacenes alm ON a.idAlmacenActual = alm.idAlmacen
+        LEFT JOIN Inv_seg_usuarios u ON a.idTecnicoActual = u.idUsuario
+        LEFT JOIN Inv_cat_clientes c ON a.idClienteActual = c.idCliente
+        WHERE a.serial LIKE @serial
+    `, { serial: { valor: `%${serial}%`, tipo: NVarChar } });
+}
+
+export async function listarActivos(filtros: {
+  texto?: string;
+  estado?: string;
+  idAlmacen?: number;
+} = {}) {
+  let query = `
+        SELECT 
+            a.idActivo,
+            a.serial,
+            a.estado,
+            a.modelo,
+            p.nombre as productoNombre,
+            p.codigo as productoCodigo,
+            alm.nombre as ubicacionAlmacen,
+            u.nombre as tecnicoResponsable,
+            c.nombre as clienteAsignado,
+            a.fechaIngreso
+        FROM Inv_act_activos a
+        JOIN Inv_cat_productos p ON a.idProducto = p.idProducto
+        LEFT JOIN Inv_cat_almacenes alm ON a.idAlmacenActual = alm.idAlmacen
+        LEFT JOIN Inv_seg_usuarios u ON a.idTecnicoActual = u.idUsuario
+        LEFT JOIN Inv_cat_clientes c ON a.idClienteActual = c.idCliente
+        WHERE 1=1
+    `;
+
+  const params: any = {};
+
+  if (filtros.texto) {
+    query += ` AND (a.serial LIKE @texto OR p.nombre LIKE @texto OR p.codigo LIKE @texto)`;
+    params.texto = { valor: `%${filtros.texto}%`, tipo: NVarChar };
+  }
+
+  if (filtros.estado) {
+    query += ` AND a.estado = @estado`;
+    params.estado = { valor: filtros.estado, tipo: NVarChar };
+  }
+
+  if (filtros.idAlmacen) {
+    query += ` AND a.idAlmacenActual = @idAlmacen`;
+    params.idAlmacen = { valor: filtros.idAlmacen, tipo: Int };
+  }
+
+  query += ` ORDER BY a.fechaIngreso DESC`;
+
+  // Limitamos a 200 resultados para no sobrecargar si no hay filtros estrictos
+  query = query.replace('
+
+[FILE: inv_modules\activos\activos.repo.ts]
+'SELECT TOP 200'
+
+[FILE: inv_modules\activos\activos.repo.ts]
+`, {
+    idActivo: { valor: datos.idActivo, tipo: Int },
+    idTecnico: { valor: datos.idTecnico || null, tipo: Int },
+    idAlmacen: { valor: datos.idAlmacen || null, tipo: Int },
+    idUsuarioAsigna: { valor: datos.idUsuarioAsigna, tipo: Int },
+    notas: { valor: datos.notas || 'Reasignación', tipo: NVarChar }
+  });
+}
+
+export async function crearActivo(datos: {
+  serial: string;
+  idProducto: number;
+  estado: string;
+  idAlmacenActual?: number;
+  modelo?: string;
+  idUsuarioRegistra: number;
+}) {
+  // Verificar duplicado
+  const existe = await ejecutarQuery('SELECT 1 FROM Inv_act_activos WHERE serial = @serial', {
+    serial: { valor: datos.serial, tipo: NVarChar }
+  });
+  if (existe.length > 0) throw new Error(`
+
+[FILE: inv_modules\activos\activos.repo.ts]
+`
+        INSERT INTO Inv_act_activos (serial, idProducto, estado, idAlmacenActual, modelo, fechaIngreso)
+        VALUES (@serial, @idProducto, @estado, @idAlmacenActual, @modelo, GETDATE());
+
+        DECLARE @idActivo INT = SCOPE_IDENTITY();
+
+        INSERT INTO Inv_act_historial (idActivo, tipoMovimiento, idUbicacionNueva, fechaMovimiento, idUsuarioRegistra, notas)
+        VALUES (@idActivo, 'ALTA', @idAlmacenActual, GETDATE(), @idUsuarioRegistra, 'Alta Inicial');
+
+        SELECT @idActivo as id;
+    `
+
+[FILE: inv_modules\activos\activos.repo.ts]
+', tipo: NVarChar },
+    idUsuarioRegistra: { valor: datos.idUsuarioRegistra, tipo: Int }
+  });
+}
+
+export async function obtenerHistorialActivo(idActivo: number) {
+  return await ejecutarQuery(`
+        SELECT 
+            h.idHistorial,
+            h.tipoMovimiento,
+            h.idUbicacionNueva,
+            h.idResponsableNuevo,
+            h.fechaMovimiento,
+            h.notas,
+            alm.nombre as ubicacionNombre,
+            u.nombre as responsableNombre
+        FROM Inv_act_historial h
+        LEFT JOIN Inv_cat_almacenes alm ON h.idUbicacionNueva = alm.idAlmacen
+        LEFT JOIN Inv_seg_usuarios u ON h.idResponsableNuevo = u.idUsuario
+        WHERE h.idActivo = @idActivo
+        ORDER BY h.fechaMovimiento DESC
+    `, {
+    idActivo: { valor: idActivo, tipo: Int }
+  });
+}
+
+export async function eliminarActivo(idActivo: number, idUsuarioRegistra: number) {
+  return await ejecutarQuery(`
+        UPDATE Inv_act_activos
+        SET estado = '
+
+[FILE: inv_modules\auditoria\auditoria.repo.ts]
+';
+
+export async function listarAuditorias() {
+    return await ejecutarQuery(`
+        SELECT 
+            a.idConteo, 
+            alm.nombre as almacenNombre, 
+            a.fechaInicio, 
+            a.estado 
+        FROM Inv_aud_conteos a
+        JOIN Inv_cat_almacenes alm ON a.idAlmacen = alm.idAlmacen
+        ORDER BY a.fechaInicio DESC
+    `);
+}
+
+export async function iniciarAuditoria(datos: any) {
+    // 1. Crear cabecera de conteo
+    const res = await ejecutarQuery(`
+        INSERT INTO Inv_aud_conteos (idAlmacen, fechaInicio, estado, nombre_referencia, idUsuarioResponsable)
+        VALUES (@idAlmacen, GETDATE(), '
+
+[FILE: inv_modules\auditoria\auditoria.repo.ts]
+', @nombre, @idUsuario);
+        SELECT SCOPE_IDENTITY() as id;
+    `, {
+        idAlmacen: { valor: datos.almacenId, tipo: Int },
+        nombre: { valor: datos.nombre, tipo: NVarChar },
+        idUsuario: { valor: datos.idUsuario, tipo: Int }
+    });
+
+    const idConteo = res[0].id;
+
+    // 2. Snapshot: Copiar stock actual a tabla de detalle para comparar
+    await ejecutarQuery(`
+        INSERT INTO Inv_aud_conteo_detalles (idConteo, idProducto, sistemaQty, conteoQty)
+        SELECT @idConteo, idProducto, cantidad, 0
+        FROM Inv_stk_contenido
+        WHERE idAlmacen = @idAlmacen
+    `, {
+        idConteo: { valor: idConteo, tipo: Int },
+        idAlmacen: { valor: datos.almacenId, tipo: Int }
+    });
+
+    return { idConteo };
+}
+
+export async function conciliarAuditoria(datos: any) {
+    const { idConteo, items } = datos;
+
+    // 1. Actualizar conteos físicos
+    for (const item of items) {
+        await ejecutarQuery(`
+            UPDATE Inv_aud_conteo_detalles 
+            SET conteoQty = @qty 
+            WHERE idConteo = @idConteo AND idProducto = @idProducto
+        `, {
+            idConteo: { valor: idConteo, tipo: Int },
+            idProducto: { valor: item.productoId, tipo: Int },
+            qty: { valor: item.countedQty, tipo: Int }
+        });
+    }
+
+    // 2. Cerrar auditoría
+    await ejecutarQuery(`
+        UPDATE Inv_aud_conteos 
+        SET estado = '
+
+[FILE: inv_modules\auditoria\auditoria.repo.ts]
+', fechaFin = GETDATE()
+        WHERE idConteo = @idConteo
+    `, { idConteo: { valor: idConteo, tipo: Int } });
+
+    // (Opcional: Aquí se podrían generar movimientos de ajuste automático)
+    return { success: true };
+}
+
+export async function listarCierresMensuales() {
+    // Si no existe tabla de cierres, retornamos mock o vacío por ahora
+    // Asumiremos que existe Inv_rep_cierres_mensuales
+    try {
+        return await ejecutarQuery(`SELECT TOP 12 * FROM Inv_rep_cierres_mensuales ORDER BY fechaCorte DESC`);
+    } catch (e) {
+        return [];
+    }
+}
+
+export async function generarCierreMensual(datos: any) {
+    // Calcula valor total del inventario actual
+    const totales = await ejecutarQuery(`
+        SELECT SUM(c.cantidad * p.precioBase) as valorTotal, COUNT(*) as totalItems
+        FROM Inv_stk_contenido c
+        JOIN Inv_cat_productos p ON c.idProducto = p.idProducto
+    `);
+
+    const { valorTotal, totalItems } = totales[0];
+
+    // Guarda el registro histórico
+    await ejecutarQuery(`
+        INSERT INTO Inv_rep_cierres_mensuales (mes, fechaCorte, totalItems, valorTotal, estado, idUsuarioGenera)
+        VALUES (@mes, GETDATE(), @totalItems, @valorTotal, '
+
+[FILE: inv_modules\auth\inv_auth.repo.ts]
+',
+    {
+      idUsuario: { valor: idUsuario, tipo: Int },
+      modulo: { valor: modulo, tipo: NVarChar },
+      accion: { valor: accion, tipo: NVarChar },
+    },
+  );
+
+  return result.length > 0 ? result[0].tienePermiso : false;
+}
+
+// === GESTIÓN DE USUARIOS ===
+
+export async function listarUsuarios() {
+  const request = await crearRequest();
+  // Consulta directa para evitar crear SP ahora
+  const query = `
+        SELECT 
+            u.idUsuario,
+            u.nombre,
+            u.correo,
+            u.carnet,
+            u.activo,
+            r.idRol,
+            r.nombre as rolNombre,
+            (
+                SELECT TOP 1 CAST(ot.idOT AS VARCHAR) + '
+
+[FILE: inv_modules\auth\inv_auth.repo.ts]
+'
+            ) as laborActual,
+            (
+                SELECT COUNT(*) 
+                FROM Inv_ope_ot ot 
+                WHERE ot.idTecnicoAsignado = u.idUsuario AND ot.estado = '
+
+[FILE: inv_modules\auth\inv_auth.repo.ts] CALL SP: Inv_sp_auth_token_registrar
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts]
+'SELECT idTipoOT as id, nombre FROM Inv_cat_tipos_ot'
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts]
+`
+        SELECT u.idUsuario, u.nombre, u.correo, u.carnet, r.nombre as rolNombre
+        FROM Inv_seg_usuarios u
+        LEFT JOIN Inv_seg_roles r ON u.idRol = r.idRol
+        WHERE u.activo = 1
+        ORDER BY u.nombre ASC
+    `
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts] CALL SP: Inv_sp_cat_listar
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts] CALL SP: Inv_sp_cat_listar
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts] CALL SP: Inv_sp_cat_listar
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts] CALL SP: Inv_sp_cat_listar
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts] CALL SP: Inv_sp_cat_listar
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts] CALL SP: Inv_sp_cat_listar
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts] CALL SP: Inv_sp_cat_upsert
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts] CALL SP: Inv_sp_cat_upsert
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts] CALL SP: Inv_sp_cat_upsert
+
+[FILE: inv_modules\catalogos\catalogos.repo.ts] CALL SP: Inv_sp_cat_upsert
+
+[FILE: inv_modules\inventario\consignacion.repo.ts]
+`
+        SELECT 
+            p.nombre as producto, p.codigo,
+            a.nombre as almacen,
+            s.cantidad, p.unidad
+        FROM Inv_inv_stock s
+        JOIN Inv_cat_productos p ON s.productoId = p.idProducto
+        JOIN Inv_cat_almacenes a ON s.almacenId = a.idAlmacen
+        WHERE s.proveedorId = ${idProveedor} AND s.cantidad > 0
+    `
+
+[FILE: inv_modules\inventario\consignacion.repo.ts]
+`
+        SELECT * FROM Inv_ope_liquidaciones 
+        WHERE proveedorId = ${idProveedor}
+        ORDER BY fechaCorte DESC
+    `
+
+[FILE: inv_modules\inventario\consignacion.repo.ts] CALL SP: Inv_sp_rep_consignacion_calcular
+
+[FILE: inv_modules\inventario\consignacion.repo.ts] CALL SP: Inv_sp_inv_liquidacion_procesar
+
+[FILE: inv_modules\inventario\consignacion.repo.ts] CALL SP: Inv_sp_inv_liquidacion_listar
+
+[FILE: inv_modules\inventario\inventario.repo.ts]
+', {
+    almacenId: { valor: filtros.almacenId || null, tipo: Int },
+    productoId: { valor: filtros.productoId || null, tipo: Int },
+    buscar: { valor: filtros.buscar || null, tipo: NVarChar },
+  });
+}
+
+/**
+ * Obtiene específicamente el stock en consignación (De proveedores)
+ */
+export async function obtenerStockConsignado() {
+  return await ejecutarQuery(`
+        SELECT 
+            s.productoId, p.nombre as productoNombre, p.codigo as productoCodigo,
+            s.almacenId, a.nombre as almacenNombre,
+            s.proveedorId, prov.nombre as proveedorNombre,
+            s.cantidad, p.unidad
+        FROM Inv_inv_stock s
+        JOIN Inv_cat_productos p ON s.productoId = p.idProducto
+        JOIN Inv_cat_almacenes a ON s.almacenId = a.idAlmacen
+        JOIN Inv_cat_proveedores prov ON s.proveedorId = prov.idProveedor
+        WHERE s.propietarioTipo = '
+
+[FILE: inv_modules\inventario\inventario.repo.ts]
+', {
+    almacenId: { valor: filtros.almacenId, tipo: Int },
+    productoId: { valor: filtros.productoId, tipo: Int },
+    fechaInicio: { valor: filtros.fechaInicio || null, tipo: DateTime },
+    fechaFin: { valor: filtros.fechaFin || null, tipo: DateTime },
+  });
+}
+
+/**
+ * Obtiene el Kardex detallado visual de un producto
+ */
+export async function obtenerHistoriaProducto(productoId: number, almacenId?: number) {
+  let query = `
+      SELECT 
+          m.fechaMovimiento,
+          m.tipoMovimiento,
+          m.referenciaTexto,
+          md.cantidad,
+          md.stockNuevo as saldo,
+          u.nombre as usuario,
+          almOr.nombre as origen,
+          almDe.nombre as destino
+      FROM Inv_inv_movimientos m
+      JOIN Inv_inv_movimiento_detalle md ON m.idMovimiento = md.idMovimiento
+      JOIN Inv_seg_usuarios u ON m.idUsuarioResponsable = u.idUsuario
+      LEFT JOIN Inv_cat_almacenes almOr ON m.almacenOrigenId = almOr.idAlmacen
+      LEFT JOIN Inv_cat_almacenes almDe ON m.almacenDestinoId = almDe.idAlmacen
+      WHERE md.productoId = @prodId 
+  `;
+
+  if (almacenId) {
+    query += ` AND (m.almacenOrigenId = @almId OR m.almacenDestinoId = @almId)`;
+  }
+
+  query += ` ORDER BY m.fechaMovimiento DESC`;
+
+  return await ejecutarQuery(query, {
+    prodId: { valor: productoId, tipo: Int },
+    almId: { valor: almacenId || null, tipo: Int }
+  });
+}
+
+/**
+ * Inicia una transferencia entre almacenes (Resta stock de origen)
+ */
+/**
+ * Realiza una transferencia directa entre almacenes (Impacto inmediato en Origen y Destino)
+ * Se eliminó el paso intermedio de confirmación para reducir fricción.
+ */
+export async function enviarTransferencia(dto: {
+  almacenOrigenId: number;
+  almacenDestinoId: number;
+  idUsuarioEnvia: number; // Usado también como receptor automático
+  notas?: string;
+  detalles: { productoId: number; cantidad: number }[];
+}) {
+  return await conTransaccion(async (tx) => {
+    // 1. Iniciar la transferencia (Resta Origen)
+    const resEnvio = await ejecutarSP<{ idTransferencia: number }>(
+      '
+
+[FILE: inv_modules\inventario\inventario.repo.ts]
+'SELECT idProducto FROM Inv_cat_productos WHERE codigo = @codigo'
+
+[FILE: inv_modules\inventario\inventario.repo.ts]
+`
+        SELECT 
+            t.idTransferencia,
+            t.almacenOrigenId, ao.nombre as almacenOrigenNombre,
+            t.almacenDestinoId, ad.nombre as almacenDestinoNombre,
+            t.idUsuarioEnvia, ue.nombre as usuarioEnviaNombre,
+            t.idUsuarioRecibe, ur.nombre as usuarioRecibeNombre,
+            t.fechaEnvio, t.fechaRecepcion, t.estado, t.notas
+        FROM Inv_inv_transferencias t
+        JOIN Inv_cat_almacenes ao ON t.almacenOrigenId = ao.idAlmacen
+        JOIN Inv_cat_almacenes ad ON t.almacenDestinoId = ad.idAlmacen
+        LEFT JOIN Inv_seg_usuarios ue ON t.idUsuarioEnvia = ue.idUsuario
+        LEFT JOIN Inv_seg_usuarios ur ON t.idUsuarioRecibe = ur.idUsuario
+        WHERE (@idAlmacen IS NULL OR t.almacenOrigenId = @idAlmacen OR t.almacenDestinoId = @idAlmacen)
+          AND (@estado IS NULL OR t.estado = @estado)
+        ORDER BY t.fechaEnvio DESC
+    `
+
+[FILE: inv_modules\inventario\inventario.repo.ts]
+`
+        SELECT 
+            d.productoId,
+            p.nombre as productoNombre,
+            p.codigo as productoCodigo,
+            d.cantidad
+        FROM Inv_inv_transferencias_detalles d
+        JOIN Inv_cat_productos p ON d.productoId = p.idProducto
+        WHERE d.idTransferencia = @id
+    `
+
+[FILE: inv_modules\inventario\inventario.repo.ts] CALL SP: Inv_sp_inv_movimiento_procesar_item
+
+[FILE: inv_modules\inventario\inventario.repo.ts] CALL SP: Inv_sp_inv_kardex_obtener
+
+[FILE: inv_modules\inventario\inventario.repo.ts] CALL SP: Inv_sp_inv_transferencia_item_enviar
+
+[FILE: inv_modules\inventario\inventario.repo.ts] CALL SP: Inv_sp_inv_transferencia_confirmar
+
+[FILE: inv_modules\inventario\inventario.repo.ts] CALL SP: Inv_sp_inv_transferencia_confirmar
+
+[FILE: inv_modules\inventario\inventario.repo.ts] CALL SP: Inv_sp_inv_movimiento_procesar_item
+
+[FILE: inv_modules\inventario\inv_audit.repo.ts]
+`
+          INSERT INTO Inv_aud_conteos (almacenId, fechaInicio, estado, nombre_referencia, idResponsable)
+          VALUES (@almacenId, GETDATE(), 'EN PROCESO', @notas, @idUsuario);
+          SELECT SCOPE_IDENTITY() as id;
+      `
+
+[FILE: inv_modules\inventario\inv_audit.repo.ts]
+`
+          INSERT INTO Inv_aud_conteo_detalles (idConteo, idProducto, sistemaQty, conteoQty)
+          SELECT @idConteo, idProducto, cantidad, 0
+          FROM Inv_stk_contenido
+          WHERE idAlmacen = @almacenId
+      `
+
+[FILE: inv_modules\inventario\inv_audit.repo.ts]
+', {
+    idConteo: { valor: idConteo, tipo: Int },
+    idUsuario: { valor: idUsuario, tipo: Int },
+  });
+}
+
+export async function listarConteos() {
+  return await ejecutarQuery(`
+        SELECT c.idConteo, a.nombre as almacenNombre, c.fechaInicio, c.fechaFin, c.estado, u.nombre as responsableNombre
+        FROM Inv_aud_conteos c
+        JOIN Inv_cat_almacenes a ON c.almacenId = a.idAlmacen
+        LEFT JOIN Inv_seg_usuarios u ON c.idResponsable = u.idUsuario
+        ORDER BY c.fechaInicio DESC
+    `);
+}
+
+export async function listarCierresMensuales() {
+  try {
+    return await ejecutarQuery(`SELECT TOP 12 * FROM Inv_rep_cierres_mensuales ORDER BY fechaCorte DESC`);
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function generarCierreMensual(datos: any) {
+  const totales = await ejecutarQuery(`
+        SELECT SUM(c.cantidad * p.precioBase) as valorTotal, COUNT(*) as totalItems
+        FROM Inv_stk_contenido c
+        JOIN Inv_cat_productos p ON c.idProducto = p.idProducto
+    `);
+  const { valorTotal, totalItems } = totales[0];
+  await ejecutarQuery(`
+        INSERT INTO Inv_rep_cierres_mensuales (mes, fechaCorte, totalItems, valorTotal, estado, idUsuarioGenera)
+        VALUES (@mes, GETDATE(), @totalItems, @valorTotal, '
+
+[FILE: inv_modules\inventario\inv_audit.repo.ts] CALL SP: Inv_sp_conteo_registrar_item
+
+[FILE: inv_modules\inventario\inv_audit.repo.ts] CALL SP: Inv_sp_conteo_finalizar
+
+[FILE: inv_modules\inventario\reportes.repo.ts]
+'SELECT idAlmacenTecnico FROM Inv_seg_usuarios WHERE idUsuario = @userId'
+
+[FILE: inv_modules\inventario\reportes.repo.ts]
+`
+        SELECT 
+            ot.idOT as otCodigo, 
+            ot.fechaCierre,
+            u.nombre as tecnicoNombre,
+            p.nombre as productoNombre,
+            p.codigo as productoCodigo,
+            oc.cantidad,
+            proj.nombre as proyectoNombre
+        FROM Inv_ope_ot ot
+        JOIN Inv_ope_ot_consumos oc ON ot.idOT = oc.idOT
+        JOIN Inv_cat_productos p ON oc.productoId = p.idProducto
+        JOIN Inv_seg_usuarios u ON ot.idTecnico = u.idUsuario
+        LEFT JOIN Inv_ope_proyectos proj ON ot.idProyecto = proj.idProyecto
+        WHERE CAST(ot.fechaCierre AS DATE) = @fecha
+        ORDER BY u.nombre, ot.fechaCierre
+    `
+
+[FILE: inv_modules\inventario\reportes.repo.ts] CALL SP: Inv_sp_dashboard_resumen
+
+[FILE: inv_modules\inventario\reportes.repo.ts] CALL SP: Inv_sp_repo_consumo_por_proyecto
+
+[FILE: inv_modules\inventario\reportes.repo.ts] CALL SP: Inv_sp_rep_ot_sla_tiempos
+
+[FILE: inv_modules\inventario\reportes.repo.ts] CALL SP: Inv_sp_rep_stock_bajo
+
+[FILE: inv_modules\inventario\reportes.repo.ts] CALL SP: Inv_sp_rep_consumo_por_tecnico
+
+[FILE: inv_modules\inventario\reportes.repo.ts] CALL SP: Inv_sp_rep_activos_estado
+
+[FILE: inv_modules\inventario\reportes.repo.ts] CALL SP: Inv_sp_inv_stock_obtener
+
+[FILE: inv_modules\inventario\reportes.repo.ts] CALL SP: Inv_sp_inv_stock_ajustar
+
+[FILE: inv_modules\operaciones\operaciones.repo.ts]
+';
+
+// ... (existing code for crearOT and listarOTs kept if not replaced, but we are replacing listarOTsQuery)
+
+export async function listarOTsQuery(idTecnico?: number, idCliente?: number) {
+  const request = await crearRequest();
+  let query = `
+        SELECT 
+            ot.idOT,
+            ot.idProyecto,
+            p.nombre as proyectoNombre,
+            ot.idTecnicoAsignado,
+            u.nombre as tecnicoNombre,
+            ot.clienteNombre,
+            ot.clienteDireccion,
+            ot.tipoOT,
+            ot.prioridad,
+            ot.estado,
+            ot.fechaAsignacion,
+            ot.fechaCreacion,
+            ot.fechaCierre,
+            ot.notas,
+            ot.numeroCliente,
+            ot.contactoNombre,
+            ot.telefono,
+            ot.correo,
+            ot.descripcionTrabajo
+        FROM Inv_ope_ot ot
+        LEFT JOIN Inv_ope_proyectos p ON ot.idProyecto = p.idProyecto
+        LEFT JOIN Inv_seg_usuarios u ON ot.idTecnicoAsignado = u.idUsuario
+        WHERE 1=1
+    `;
+
+  if (idTecnico) {
+    request.input('
+
+[FILE: inv_modules\operaciones\operaciones.repo.ts]
+" si existe la columna, 
+    // OJO: En el repo 'crearOT' usa 'idCliente', así que la columna DEBE existir.
+    query += ` AND ot.idCliente = @idCliente`;
+  }
+
+  query += ` ORDER BY ot.fechaCreacion DESC`;
+
+  const res = await request.query(query);
+  return res.recordset;
+}
+
+export async function crearOT(dto: {
+  idProyecto?: number;
+  idCliente?: number;
+  idTipoOT: number;
+  prioridad: string;
+  direccion: string;
+  idUsuarioCrea: number;
+  idTecnicoAsignado?: number;
+  estado?: string;
+  notas?: string;
+  numeroCliente?: string;
+  contactoNombre?: string;
+  telefono?: string;
+  correo?: string;
+  descripcionTrabajo?: string;
+  clienteNombre?: string;
+}) {
+  const res = await ejecutarSP<{ idOT: number }>('Inv_sp_ot_crear', {
+    idProyecto: { valor: dto.idProyecto || null, tipo: Int },
+    idCliente: { valor: dto.idCliente || null, tipo: Int },
+    idTipoOT: { valor: dto.idTipoOT, tipo: Int },
+    prioridad: { valor: dto.prioridad, tipo: NVarChar },
+    direccion: { valor: dto.direccion, tipo: NVarChar },
+    idUsuarioCrea: { valor: dto.idUsuarioCrea, tipo: Int },
+    notas: { valor: dto.notas || null, tipo: NVarChar },
+    numeroCliente: { valor: dto.numeroCliente || null, tipo: NVarChar },
+    contactoNombre: { valor: dto.contactoNombre || null, tipo: NVarChar },
+    telefono: { valor: dto.telefono || null, tipo: NVarChar },
+    correo: { valor: dto.correo || null, tipo: NVarChar },
+    descripcionTrabajo: { valor: dto.descripcionTrabajo || null, tipo: NVarChar },
+    clienteNombre: { valor: dto.clienteNombre || null, tipo: NVarChar },
+  });
+
+  const idOT = res[0]?.idOT;
+
+  if (idOT && (dto.idTecnicoAsignado || dto.estado)) {
+    const request = await crearRequest();
+    request.input('idOT', Int, idOT);
+    let updateQuery = `UPDATE Inv_ope_ot SET idOT = idOT`;
+    if (dto.idTecnicoAsignado) {
+      request.input('idTec', Int, dto.idTecnicoAsignado);
+      updateQuery += `, idTecnicoAsignado = @idTec, fechaAsignacion = GETDATE(), estado = 'EN_PROGRESO'`;
+    }
+    if (dto.estado && !dto.idTecnicoAsignado) {
+      request.input('est', NVarChar, dto.estado);
+      updateQuery += `, estado = @est`;
+    }
+    updateQuery += ` WHERE idOT = @idOT`;
+    await request.query(updateQuery);
+  }
+
+  // 3. Log History
+  await logOTHistory(idOT, 'CREACION', 'REGISTRADA', 'Creación inicial', dto.idUsuarioCrea);
+  if (dto.idTecnicoAsignado) {
+    await logOTHistory(idOT, 'ASIGNACION', 'EN_PROGRESO', `Asignado a técnico ${dto.idTecnicoAsignado}`, dto.idUsuarioCrea);
+  }
+
+  return res[0];
+}
+
+export async function listarOTs(filtros: {
+  idTecnico?: number;
+  estado?: string;
+  fechaInicio?: Date;
+  fechaFin?: Date;
+}) {
+  const params = {
+    idTecnico: { valor: filtros.idTecnico || null, tipo: Int },
+    estado: { valor: filtros.estado || null, tipo: NVarChar },
+    fechaInicio: { valor: filtros.fechaInicio || null, tipo: DateTime },
+  };
+
+  try {
+    // 1. INTENTO POR PROCEDIMIENTO ALMACENADO (RECOMENDADO)
+    return await ejecutarSP('Inv_sp_ot_listar_filtro', params);
+  } catch (error) {
+    // 2. FALLBACK: CONSULTA INLINE (SEGURIDAD PARA PRESENTACIÓN)
+    console.warn('⚠️ SP Inv_sp_ot_listar_filtro no encontrado o falló. Usando Query de respaldo.');
+    const query = `
+        SELECT 
+            ot.*, 
+            p.nombre as proyectoNombre, 
+            u.nombre as tecnicoNombre
+        FROM Inv_ope_ot ot
+        LEFT JOIN Inv_ope_proyectos p ON ot.idProyecto = p.idProyecto
+        LEFT JOIN Inv_seg_usuarios u ON ot.idTecnicoAsignado = u.idUsuario
+        WHERE (@idTecnico IS NULL OR ot.idTecnicoAsignado = @idTecnico)
+          AND (@estado IS NULL OR ot.estado = @estado)
+          AND (@fechaInicio IS NULL OR ot.fechaCreacion >= @fechaInicio)
+        ORDER BY ot.fechaCreacion DESC
+    `;
+    return await ejecutarQuery(query, {
+      idTecnico: params.idTecnico,
+      estado: params.estado,
+      fechaInicio: params.fechaInicio,
+    });
+  }
+}
+
+export async function cerrarOT(
+  idOT: number,
+  idUsuario: number,
+  notas?: string,
+) {
+  return await ejecutarSP('Inv_sp_ot_cerrar', {
+    idOT: { valor: idOT, tipo: Int },
+    idUsuarioCierra: { valor: idUsuario, tipo: Int },
+    notas: { valor: notas || null, tipo: NVarChar },
+  });
+}
+
+export async function validarStockDisponible(almacenId: number, productoId: number, cantidadRequerida: number) {
+  const res = await ejecutarQuery(`
+      SELECT cantidad FROM Inv_inv_stock 
+      WHERE almacenId = @alm AND productoId = @prod
+  `, {
+    alm: { valor: almacenId, tipo: Int },
+    prod: { valor: productoId, tipo: Int }
+  });
+
+  const disponible = res[0]?.cantidad || 0;
+  if (disponible < cantidadRequerida) {
+    throw new Error(`Stock insuficiente. Disponible: ${disponible}, Requerido: ${cantidadRequerida}`);
+  }
+}
+
+export async function registrarConsumoOT(
+  idOT: number,
+  item: {
+    productoId: number;
+    cantidad: number;
+    idUsuario: number;
+  },
+) {
+  // 1. Obtener Almacén Técnico del usuario (Asumiendo que el usuario es un técnico con almacén asignado)
+  // OJO: En un sistema ideal, el almacénID vendría del usuario. 
+  // Por simplicidad para la demo, buscaremos el almacén tipo 'TECNICO' asociado al usuario,
+  // O usaremos un parámetro, pero aquí lo buscaremos dinámicamente.
+
+  const usuarioRes = await ejecutarQuery(`SELECT idAlmacenTecnico FROM Inv_seg_usuarios WHERE idUsuario = @u`, { u: { valor: item.idUsuario, tipo: Int } });
+  const almacenOrigenId = usuarioRes[0]?.idAlmacenTecnico;
+
+  if (almacenOrigenId) {
+    // 2. Validar Stock antes de iniciar transacción
+    await validarStockDisponible(almacenOrigenId, item.productoId, item.cantidad);
+  }
+
+  return await conTransaccion(async (tx) => {
+    const resMov = await ejecutarSP<{ idMovimiento: number }>(
+      'Inv_sp_inv_movimiento_crear_header',
+      {
+        tipoMovimiento: { valor: 'CONSUMO_OT', tipo: NVarChar },
+        idUsuarioResponsable: { valor: item.idUsuario, tipo: Int },
+        almacenOrigenId: { valor: almacenOrigenId || null, tipo: Int }, // Usar el almacén encontrado
+        notas: { valor: `Consumo OT #${idOT}`, tipo: NVarChar },
+        referenciaTexto: { valor: `OT-${idOT}`, tipo: NVarChar },
+      },
+      tx,
+    );
+
+
+    const idMov = resMov[0]?.idMovimiento;
+
+    await ejecutarSP(
+      'Inv_sp_inv_movimiento_procesar_item',
+      {
+        idMovimiento: { valor: idMov, tipo: Int },
+        productoId: { valor: item.productoId, tipo: Int },
+        cantidad: { valor: -Math.abs(item.cantidad), tipo: Decimal(18, 2) },
+        propietarioTipo: { valor: 'EMPRESA', tipo: NVarChar },
+        proveedorId: { valor: 0, tipo: Int },
+      },
+      tx,
+    );
+
+    await ejecutarSP(
+      'Inv_sp_ot_consumo_registrar',
+      {
+        idOT: { valor: idOT, tipo: Int },
+        productoId: { valor: item.productoId, tipo: Int },
+        cantidad: { valor: item.cantidad, tipo: Decimal(18, 2) },
+        idMovimientoInventario: { valor: idMov, tipo: Int },
+      },
+      tx,
+    );
+
+    return { idMovimiento: idMov };
+  });
+}
+
+export async function asignarOT(idOT: number, idTecnico: number, idUsuarioResponsable: number) {
+  const request = await crearRequest();
+  request.input('idOT', Int, idOT);
+  request.input('idTecnico', Int, idTecnico);
+  const query = `
+        UPDATE Inv_ope_ot 
+        SET idTecnicoAsignado = @idTecnico,
+            fechaAsignacion = GETDATE(),
+            estado = CASE WHEN estado = 'PENDIENTE' THEN 'EN_PROGRESO' ELSE estado END
+        WHERE idOT = @idOT
+    `;
+  await request.query(query);
+  await logOTHistory(idOT, 'ASIGNACION', 'EN_PROGRESO', `Reasignado a técnico ID: ${idTecnico}`, idUsuarioResponsable);
+}
+
+export async function actualizarOT(idOT: number, dto: any, idUsuarioResponsable: number) {
+  const request = await crearRequest();
+  request.input('idOT', Int, idOT);
+
+  let updates: string[] = [];
+  if (dto.prioridad) { request.input('prio', NVarChar, dto.prioridad); updates.push("
+
+[FILE: inv_modules\operaciones\operaciones.repo.ts]
+', e);
+  }
+}
+
+export async function getHistorialOT(idOT: number) {
+  try {
+    const query = `
+            SELECT h.*, u.nombre as usuarioNombre 
+            FROM Inv_ope_ot_historial h
+            LEFT JOIN Inv_seg_usuarios u ON h.idUsuario = u.idUsuario
+            WHERE h.idOT = @idOT
+            ORDER BY h.fecha DESC
+        `;
+    const request = await crearRequest();
+    request.input('
+
+[FILE: inv_modules\operaciones\operaciones.repo.ts] CALL SP: Inv_sp_ot_listar_filtro
+
+[FILE: inv_modules\operaciones\operaciones.repo.ts] CALL SP: Inv_sp_ot_cerrar
+
+[FILE: inv_modules\operaciones\operaciones.repo.ts] CALL SP: Inv_sp_inv_movimiento_procesar_item
+
+[FILE: inv_modules\operaciones\operaciones.repo.ts] CALL SP: Inv_sp_ot_consumo_registrar
+
+[FILE: inv_modules\operaciones\planificacion.repo.ts]
+`
+      INSERT INTO Inv_ope_tareas (idProyecto, idTareaPadre, nombre, descripcion, fechaInicioPrevista, fechaFinPrevista, estado)
+      VALUES (@idProyecto, @idTareaPadre, @nombre, @descripcion, @fechaInicio, @fechaFin, 'PENDIENTE');
+      SELECT SCOPE_IDENTITY() as idTarea;
+    `
+
+[FILE: inv_modules\operaciones\planificacion.repo.ts]
+', {
+  //   idProyecto: { valor: idProyecto, tipo: Int },
+  // });
+
+  return await ejecutarQuery(`
+    SELECT 
+        t.idTarea,
+        t.idProyecto,
+        t.idTareaPadre,
+        t.nombre,
+        t.descripcion,
+        t.fechaInicioPrevista,
+        t.fechaFinPrevista,
+        t.estado,
+        (SELECT COUNT(*) FROM Inv_ope_tarea_asignaciones ta WHERE ta.idTarea = t.idTarea) as asignadosCount,
+        -- Costo estimado simplificado (si existe costoPromedio en productos)
+        (SELECT CAST(ISNULL(SUM(e.cantidad * ISNULL(p.costoPromedio, 0)), 0) AS DECIMAL(18,2)) 
+         FROM Inv_ope_estimaciones e 
+         JOIN Inv_cat_productos p ON e.productoId = p.idProducto 
+         WHERE e.idTarea = t.idTarea) as costoEstimado
+    FROM Inv_ope_tareas t
+    WHERE t.idProyecto = @idProyecto
+    ORDER BY t.idTareaPadre, t.idTarea
+  `, {
+    idProyecto: { valor: idProyecto, tipo: Int },
+  });
+}
+
+/**
+ * Estima materiales para una tarea
+ */
+export async function estimarMateriales(dto: MaterialEstimado) {
+  // SP wrapper o query directa
+  // '
+
+[FILE: inv_modules\operaciones\planificacion.repo.ts]
+`
+        INSERT INTO Inv_ope_proyectos (nombre, descripcion, idResponsable, fechaInicio, estado)
+        VALUES (@nombre, @descripcion, @idResponsable, @fechaInicio, 'ACTIVO');
+        SELECT SCOPE_IDENTITY() as idProyecto;
+    `
+
+[FILE: inv_modules\operaciones\planificacion.repo.ts]
+', {
+    idTarea: { valor: dto.idTarea, tipo: Int },
+    carnetUsuario: { valor: null, tipo: NVarChar }, // Si el SP requiere carnet, necesitariamos buscarlo. Pero asumamos que podemos adaptar o usar ID.
+    // Espera: el SP sp_Tarea_AsignarResponsable usa @carnetUsuario.
+    // Necesitamos obtener el carnet del usuario por ID primero O modificar el SP para aceptar ID.
+    // Dado que no puedo cambiar el SP fácilmente sin ver si acepta NULL, haré query wrapper.
+
+    // Mejor opcion: Insertar directo en Inv_ope_proyecto_tarea_asignados o usar wrapper
+    // Vamos a hacer una query directa para evitar complicaciones con el SP de carnet si no tenemos el carnet
+    tipo: { valor: dto.rol, tipo: NVarChar },
+    esReasignacion: { valor: 0, tipo: Int }, // Boolean 0
+  });
+}
+
+// Wrapper para asignar por ID directamente (bypass carnet requirement if SP is strict)
+export async function asignarUsuarioPorId(dto: {
+  idTarea: number;
+  idUsuario: number;
+  rol: string;
+}) {
+  return await ejecutarQuery(
+    `
+        IF NOT EXISTS (SELECT 1 FROM Inv_ope_tarea_asignaciones WHERE idTarea = @idTarea AND idUsuario = @idUsuario)
+        BEGIN
+            DECLARE @carnet NVARCHAR(50);
+            -- Try to get carnet if possible, otherwise null
+            SELECT TOP 1 @carnet = carnet FROM Inv_seg_usuarios WHERE idUsuario = @idUsuario;
+ 
+            INSERT INTO Inv_ope_tarea_asignaciones (idTarea, idUsuario, carnet, tipo, fechaAsignacion)
+            VALUES (@idTarea, @idUsuario, @carnet, @rol, GETDATE())
+        END
+        ELSE
+        BEGIN
+             UPDATE Inv_ope_tarea_asignaciones SET tipo = @rol WHERE idTarea = @idTarea AND idUsuario = @idUsuario
+        END
+    `,
+    {
+      idTarea: { valor: dto.idTarea, tipo: Int },
+      idUsuario: { valor: dto.idUsuario, tipo: Int },
+      rol: { valor: dto.rol, tipo: NVarChar },
+    },
+  );
+}
+
+export async function listarProyectos() {
+  return await ejecutarQuery(`
+        SELECT 
+            p.idProyecto, 
+            p.nombre, 
+            p.descripcion, 
+            p.idResponsable,
+            u.nombre as responsableNombre,
+            p.fechaInicio, 
+            p.fechaFin, 
+            p.estado 
+        FROM Inv_ope_proyectos p
+        LEFT JOIN Inv_seg_usuarios u ON p.idResponsable = u.idUsuario
+        ORDER BY p.estado ASC, p.nombre
+    `);
+}
+
+/**
+ * Obtiene el historial de eventos del proyecto (Asignaciones, etc.)
+ */
+export async function obtenerHistorialProyecto(idProyecto: number) {
+  return await ejecutarQuery(
+    `
+        SELECT 
+            '
+
+[FILE: inv_modules\operaciones\planificacion.repo.ts]
+`
+        SELECT a.idAsignacion, u.nombre, a.tipo as rol, a.fechaAsignacion, a.carnet
+        FROM Inv_ope_tarea_asignaciones a
+        JOIN Inv_seg_usuarios u ON a.idUsuario = u.idUsuario
+        WHERE a.idTarea = @id
+    `
+
+[FILE: inv_modules\operaciones\planificacion.repo.ts]
+`
+        SELECT e.idEstimacion, p.nombre as productoNombre, e.cantidad, al.nombre as almacenNombre
+        FROM Inv_ope_estimaciones e
+        JOIN Inv_cat_productos p ON e.productoId = p.idProducto
+        LEFT JOIN Inv_cat_almacenes al ON e.idAlmacenSugerido = al.idAlmacen
+        WHERE e.idTarea = @id
+    `
+
+[FILE: inv_modules\operaciones\planificacion.repo.ts] CALL SP: Inv_sp_proyecto_wbs_obtener
+
+[FILE: inv_modules\operaciones\planificacion.repo.ts] CALL SP: sp_Tarea_AsignarResponsable
+
+[FILE: inv_modules\vehiculos\vehiculos.repo.ts]
+', {
+        idVehiculo: { valor: dto.idVehiculo, tipo: Int },
+        idUsuario: { valor: dto.idUsuario, tipo: Int },
+        kmEntrada: { valor: dto.kmEntrada, tipo: Int },
+        kmSalida: { valor: dto.kmSalida, tipo: Int },
+        gasto: { valor: dto.gastoCombustible, tipo: Decimal(18, 2) },
+        voucher: { valor: dto.numeroVoucher || null, tipo: NVarChar },
+        urlVoucher: { valor: dto.urlVoucher || null, tipo: NVarChar }
+    });
+}
+
+export async function obtenerUltimosLogs(idVehiculo?: number) {
+    const query = `
+    SELECT TOP 50 l.*, v.placa, u.nombre as tecnicoNombre
+    FROM Inv_ope_vehiculos_log l
+    JOIN Inv_cat_vehiculos v ON l.idVehiculo = v.idVehiculo
+    JOIN Inv_seg_usuarios u ON l.idUsuario = u.idUsuario
+    ${idVehiculo ? '
+
+[FILE: inv_modules\vehiculos\vehiculos.repo.ts] CALL SP: Inv_sp_vehiculos_listar
+
+[FILE: inv_modules\vehiculos\vehiculos.repo.ts] CALL SP: Inv_sp_vehiculos_registrar_log
+
+[FILE: migrate_tasks.ts]
+');
+    try {
+        // Check if old table exists
+        const checkOld = await ejecutarQuery("SELECT * FROM sys.tables WHERE name = '
+
+[FILE: migrate_tasks.ts]
+");
+        if (checkOld.length === 0) {
+            console.log('Old table Inv_ope_proyecto_tareas does not exist. Skipping migration.');
+            return;
+        }
+
+        // Migrate data
+        // We use IDENTITY_INSERT to preserve IDs
+        await ejecutarQuery(`
+            SET IDENTITY_INSERT Inv_ope_tareas ON;
+            
+            INSERT INTO Inv_ope_tareas (idTarea, idProyecto, idTareaPadre, nombre, descripcion, fechaInicioPrevista, fechaFinPrevista, estado, orden, fechaCreacion)
+            SELECT idTarea, idProyecto, idTareaPadre, nombre, descripcion, fechaInicioPrevista, fechaFinPrevista, estado, orden, GETDATE()
+            FROM Inv_ope_proyecto_tareas
+            WHERE idTarea NOT IN (SELECT idTarea FROM Inv_ope_tareas);
+            
+            SET IDENTITY_INSERT Inv_ope_tareas OFF;
+        `);
+        console.log('Data migration complete.');
+
+        // Now update SPs
+        // We can't easily run the full .sql file from here as it might contain GO statements which mssql driver doesn't like.
+        // We will define the SPs here directly.
+
+        console.log('Updating Inv_sp_proyecto_wbs_obtener...');
+        await ejecutarQuery(`
+            CREATE OR ALTER PROCEDURE Inv_sp_proyecto_wbs_obtener
+                @idProyecto INT
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                SELECT 
+                    t.idTarea,
+                    t.idProyecto,
+                    t.idTareaPadre,
+                    t.nombre,
+                    t.descripcion,
+                    t.fechaInicioPrevista,
+                    t.fechaFinPrevista,
+                    t.estado,
+                    (SELECT COUNT(*) FROM Inv_ope_tareas sub WHERE sub.idTareaPadre = t.idTarea) as hasChildren
+                FROM Inv_ope_tareas t
+                WHERE t.idProyecto = @idProyecto
+                ORDER BY t.idTareaPadre, t.orden, t.idTarea;
+            END
+        `);
+
+        console.log('Updating Inv_sp_proyecto_tarea_crear...');
+        await ejecutarQuery(`
+            CREATE OR ALTER PROCEDURE Inv_sp_proyecto_tarea_crear
+                @idProyecto INT,
+                @idTareaPadre INT = NULL,
+                @nombre NVARCHAR(255),
+                @descripcion NVARCHAR(MAX) = NULL,
+                @fechaInicio DATETIME = NULL,
+                @fechaFin DATETIME = NULL
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                INSERT INTO Inv_ope_tareas (idProyecto, idTareaPadre, nombre, descripcion, fechaInicioPrevista, fechaFinPrevista)
+                VALUES (@idProyecto, @idTareaPadre, @nombre, @descripcion, @fechaInicio, @fechaFin);
+                
+                SELECT SCOPE_IDENTITY() AS idTarea;
+            END
+        `);
+
+        // Also fix the assignments logic
+        // We need to ensure Inv_ope_tarea_asignaciones has data if Inv_ope_proyecto_tarea_asignados had data
+        // But the previous error said Inv_ope_proyecto_tarea_asignados invalid object name, so maybe assignment table was missing?
+        // Wait, earlier log: "
+
+[FILE: run_fix_table.ts]
+');
+        await ejecutarQuery(`
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = '
+
+[FILE: run_fix_table.ts]
+');
+        await ejecutarQuery(`
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = '
+
+[FILE: run_fix_table.ts]
+');
+        await ejecutarQuery(`
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = '
+
+[FILE: scripts\check_add_activo.ts]
+');
+  try {
+    const result = await ejecutarQuery(`
+            SELECT 1 FROM sys.columns 
+            WHERE Name = N'
+
+[FILE: scripts\check_add_audit_subtasks.ts]
+',
+    ];
+    for (const col of auditCols) {
+      const result = await ejecutarQuery(`
+                SELECT 1 FROM sys.columns 
+                WHERE Name = N'
+
+[FILE: scripts\check_add_audit_subtasks.ts]
+';
+    const resSub = await ejecutarQuery(`
+            SELECT 1 FROM sys.columns 
+            WHERE Name = N'
+
+[FILE: scripts\check_carnet_missing.ts]
+');
+  for (const table of tables) {
+    try {
+      const cols = await ejecutarQuery<any>(
+        `
+                SELECT COLUMN_NAME 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_NAME = @table AND COLUMN_NAME = '
+
+[FILE: scripts\check_columns.ts]
+`
+                SELECT COLUMN_NAME, DATA_TYPE 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_NAME = @table
+            `
+
+[FILE: scripts\generate_id_mapping.ts]
+');
+
+  try {
+    // 1. Obtener todos los usuarios activos
+    const usuarios = await ejecutarQuery<{
+      idUsuario: number;
+      carnet: string;
+    }>(`
+            SELECT idUsuario, carnet 
+            FROM Inv_seg_usuarios 
+            WHERE activo = 1 AND carnet IS NOT NULL AND carnet <> '
+
+[FILE: scripts\generate_id_mapping.ts]
+');
+    console.log(`
+        -- Ejemplo: Actualizar creador de tareas basado en Carnet
+        MERGE INTO Inv_ope_proyecto_tareas AS Target
+        USING (SELECT idUsuario, carnet FROM Inv_seg_usuarios) AS Source
+        ON Source.carnet = '
+
+[FILE: scripts\inspect_cols.ts]
+';
+
+async function main() {
+  try {
+    const pool = await obtenerPoolSql();
+    const result = await pool
+      .request()
+      .query(
+        "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME LIKE '
+
+[FILE: scripts\inspect_cols.ts]
+')
+    ) {
+      const result2 = await pool
+        .request()
+        .query(
+          "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '
+
+[FILE: scripts\list_all_tables.ts]
+';
+
+async function main() {
+  try {
+    const pool = await obtenerPoolSql();
+    const result = await pool
+      .request()
+      .query(
+        "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = '
+
+[FILE: scripts\seed-demo.ts]
+'SELECT idUsuario FROM Inv_seg_usuarios WHERE correo = @correoCheck'
+
+[FILE: scripts\validate_carnets.ts]
+');
+
+  try {
+    // 1. Verificar Nulos o Vacíos
+    const nulos = await ejecutarQuery(`
+            SELECT idUsuario, nombre, correo 
+            FROM Inv_seg_usuarios 
+            WHERE carnet IS NULL OR carnet = '
+
+[FILE: scripts\validate_carnets.ts]
+');
+    }
+
+    // 2. Verificar Duplicados
+    const duplicados = await ejecutarQuery(`
+            SELECT carnet, COUNT(*) as cantidad, STRING_AGG(nombre, '
+
+[FILE: scripts\validate_carnets.ts]
+');
+    }
+
+    // 3. Resumen Total
+    const total = await ejecutarQuery(
+      `SELECT COUNT(*) as c FROM Inv_seg_usuarios WHERE activo = 1`,
+    );
+    console.log(`\nTotal de usuarios activos verificados: ${total[0].c}`);
+  } catch (error) {
+    console.error('
+
+[FILE: update_sp.ts]
+');
+    try {
+        await ejecutarQuery(`
+            CREATE OR ALTER PROCEDURE Inv_sp_proyecto_material_estimar
+                @idTarea INT,
+                @productoId INT,
+                @cantidadEstimada DECIMAL(18,2),
+                @idAlmacenSugerido INT = NULL
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                INSERT INTO Inv_ope_estimaciones (idTarea, productoId, cantidad, idAlmacenSugerido)
+                VALUES (@idTarea, @productoId, @cantidadEstimada, @idAlmacenSugerido);
+                
+                SELECT SCOPE_IDENTITY() AS idEstimacion;
+            END
+        `);
+        console.log('
+

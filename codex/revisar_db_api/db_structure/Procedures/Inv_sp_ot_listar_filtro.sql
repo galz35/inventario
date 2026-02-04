@@ -1,0 +1,2 @@
+CREATE   PROCEDURE Inv_sp_ot_listar_filtro @idTecnico INT = NULL, @estado NVARCHAR(20) = NULL, @fechaInicio DATETIME = NULL AS BEGIN SELECT * FROM Inv_ope_ot WHERE (@idTecnico IS NULL OR idTecnicoAsignado = @idTecnico) AND (@estado IS NULL OR estado = @estado) AND (@fechaInicio IS NULL OR fechaCreacion >= @fechaInicio) ORDER BY fechaCreacion DESC END
+GO
