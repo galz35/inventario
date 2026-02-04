@@ -1,1 +1,0 @@
-node -e "const BASE_URL = 'http://localhost:3000/api'; const creds = { correo: 'josue.garcia@claro.com.ni', password: 'admin123' }; fetch(BASE_URL + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creds) }).then(r 

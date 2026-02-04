@@ -23,7 +23,7 @@ export class AuditoriaController {
     async iniciar(@Body() body: any, @Request() req: any) {
         return await iniciarAuditoria({
             ...body,
-            idUsuario: req.user.idUsuario
+            idUsuario: req.user.userId
         });
     }
 
@@ -32,7 +32,7 @@ export class AuditoriaController {
     async conciliar(@Body() body: any, @Request() req: any) {
         return await conciliarAuditoria({
             ...body,
-            idUsuario: req.user.idUsuario
+            idUsuario: req.user.userId
         });
     }
 
@@ -46,7 +46,7 @@ export class AuditoriaController {
     async generarCierre(@Body() body: any, @Request() req: any) {
         return await generarCierreMensual({
             ...body,
-            idUsuario: req.user.idUsuario
+            idUsuario: req.user.userId
         });
     }
 }
