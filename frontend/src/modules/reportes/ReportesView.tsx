@@ -12,18 +12,22 @@ export const ReportesView = () => {
 
     const fetchReports = async () => {
         setLoading(true);
+
         try {
             const res = await invService.getReporteSLA();
             setSlaData(res.data.data || res.data || []);
+        } catch (err: any) {
+            console.error('Error loading SLA report', err);
+        }
 
+        try {
             const resConsumo = await invService.getReporteConsumoProyecto();
             setConsumoData(resConsumo.data.data || resConsumo.data || []);
         } catch (err: any) {
-            if (err.response && (err.response.status === 401 || err.response.status === 403)) return;
-            console.error(err);
-        } finally {
-            setLoading(false);
+            console.error('Error loading Consumo report', err);
         }
+
+        setLoading(false);
     };
 
     useEffect(() => {
@@ -64,7 +68,7 @@ export const ReportesView = () => {
             </header>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '40px' }}>
-                <ReportCard title="SLA Global" value="94.2%" color="var(--secondary)" subtitle="Meta: 95%" />
+                <ReportCard title="SLA Global" value="94.2%" color="var(--secondary)" subtitle="Meta: 95% (Estimado)" />
                 <ReportCard title="Tiempo Promedio de Cierre" value="4.2 Hrs" color="var(--accent)" subtitle="Meta: < 5h" />
                 <ReportCard title="OTs Fuera de Tiempo" value="12" color="var(--primary)" subtitle="Requieren Auditoría" />
             </div>

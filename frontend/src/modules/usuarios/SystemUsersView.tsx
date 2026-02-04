@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import { authService, opeService, activosService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
-import { alertSuccess, alertError } from '../../services/alert.service';
-import { Plus, Shield, History, PenTool, Search } from 'lucide-react';
-import { UserCircle } from 'lucide-react';
+import { alertSuccess, alertError, alertConfirm } from '../../services/alert.service';
+import { Plus, Shield, History, PenTool, Search, UserCircle } from 'lucide-react';
 
 export const SystemUsersView = () => {
     // State
@@ -35,25 +34,20 @@ export const SystemUsersView = () => {
         setLoading(true);
         try {
             const res = await authService.getUsers();
-            // Data can be in res.data (unwrapped), res.data.data (wrapped by interceptor), 
-            // or even res.data.data.data (Legacy double-wrapping)
             let rawData = res.data;
             if (rawData && rawData.data) rawData = rawData.data;
             if (rawData && rawData.data) rawData = rawData.data; // Double deep for safety
 
             let data = Array.isArray(rawData) ? rawData : [];
-
             // Clean nulls
             data = data.filter((u: any) => u !== null && u !== undefined);
 
             setUsers(data);
         } catch (error: any) {
-            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-                setUsers([]);
-                return;
-            }
-            console.error('Error loading users:', error);
             setUsers([]);
+            if (error.response && (error.response.status === 401 || error.response.status === 403)) return;
+            console.error('Error loading users:', error);
+            alertError('Error', 'No se pudieron cargar los usuarios del sistema.');
         } finally {
             setLoading(false);
         }
@@ -74,7 +68,12 @@ export const SystemUsersView = () => {
     };
 
     const handleToggleStatus = async (user: any) => {
-        if (!confirm(`¿${user.activo ? 'Desactivar' : 'Activar'} a ${user.nombre}?`)) return;
+        const confirm = await alertConfirm(
+            user.activo ? '¿Desactivar Usuario?' : '¿Activar Usuario?',
+            `Se cambiará el estado de acceso de ${user.nombre}.`
+        );
+        if (!confirm.isConfirmed) return;
+
         try {
             await authService.toggleUserStatus(user.idUsuario, !user.activo);
             loadUsers();
@@ -108,6 +107,7 @@ export const SystemUsersView = () => {
 
         } catch (err) {
             console.error(err);
+            alertError('Error', 'No se pudo cargar el perfil completo.');
         } finally {
             setLoadingProfile(false);
         }
@@ -194,10 +194,10 @@ export const SystemUsersView = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <div>
                     <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff' }}>Directorio de Usuarios</h1>
+                    {/* Fixed Icon Reference */}
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Gestión de accesos, roles y perfiles técnicos</p>
                 </div>
                 <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>
-                    {/* Fixed Icon Reference */}
                     <Plus size={18} style={{ marginRight: '8px' }} />
                     Nuevo Usuario
                 </button>
@@ -208,7 +208,7 @@ export const SystemUsersView = () => {
                     columns={columns}
                     data={users}
                     loading={loading}
-                    title="" // Hidden title since we have a custom header
+                    title=""
                 />
             </div>
 

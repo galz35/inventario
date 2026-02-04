@@ -47,6 +47,7 @@ export const WorkloadView = () => {
             if (rawOts.data) rawOts = rawOts.data;
             const allOts = Array.isArray(rawOts) ? rawOts : [];
 
+            // Filter for only active work
             const mapped = onlyTecnicos.map(t => ({
                 ...t,
                 currentWork: allOts.filter(ot => ot.idTecnicoAsignado === t.idUsuario && ot.estado === 'EN_PROGRESO')
@@ -95,6 +96,18 @@ export const WorkloadView = () => {
         } catch (err) {
             alertError('Error al crear OT');
         }
+    };
+
+    const handlePrevMonth = () => {
+        const d = new Date(selectedDate);
+        d.setMonth(d.getMonth() - 1);
+        setSelectedDate(d);
+    };
+
+    const handleNextMonth = () => {
+        const d = new Date(selectedDate);
+        d.setMonth(d.getMonth() + 1);
+        setSelectedDate(d);
     };
 
     const columns = [
@@ -167,22 +180,23 @@ export const WorkloadView = () => {
 
     const CalendarView = () => {
         const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-        const currentMonth = selectedDate.toLocaleString('default', { month: 'long' });
+        const currentMonth = selectedDate.toLocaleString('es-ES', { month: 'long' });
+        const todayDayIndex = new Date().getDay(); // 0-6
 
         return (
             <div className="card" style={{ padding: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <h3 style={{ margin: 0, textTransform: 'capitalize' }}>{currentMonth} {selectedDate.getFullYear()}</h3>
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <button className="btn-secondary" style={{ padding: '5px' }} onClick={() => setSelectedDate(new Date(selectedDate.setMonth(selectedDate.getMonth() - 1)))}><ChevronLeft size={18} /></button>
-                        <button className="btn-secondary" style={{ padding: '5px' }} onClick={() => setSelectedDate(new Date(selectedDate.setMonth(selectedDate.getMonth() + 1)))}><ChevronRight size={18} /></button>
+                        <button className="btn-secondary" style={{ padding: '5px' }} onClick={handlePrevMonth}><ChevronLeft size={18} /></button>
+                        <button className="btn-secondary" style={{ padding: '5px' }} onClick={handleNextMonth}><ChevronRight size={18} /></button>
                     </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '1px', background: 'var(--border)' }}>
                     <div style={{ background: '#0a0a0a', padding: '10px' }}>Técnico</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#0a0a0a' }}>
-                        {days.map(d => <div key={d} style={{ padding: '10px', textAlign: 'center', fontSize: '0.8rem', borderLeft: '1px solid var(--border)' }}>{d}</div>)}
+                        {days.map((d, i) => <div key={d} style={{ padding: '10px', textAlign: 'center', fontSize: '0.8rem', borderLeft: '1px solid var(--border)', color: i === todayDayIndex ? 'var(--primary)' : '#fff' }}>{d}</div>)}
                     </div>
 
                     {tecnicos.map(t => (
@@ -207,8 +221,8 @@ export const WorkloadView = () => {
                                         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.05)'}
                                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                     >
-                                        {/* Show actual work if today (mocked to index 2 for now as in current code) */}
-                                        {t.currentWork.length > 0 && i === 2 && (
+                                        {/* Display Current Work in TODAY'S column, just as a visual representation */}
+                                        {t.currentWork.length > 0 && i === todayDayIndex && selectedDate.getMonth() === new Date().getMonth() && (
                                             <div style={{ padding: '6px', background: 'var(--primary)', borderRadius: '6px', fontSize: '0.7rem', color: '#fff', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>
                                                 <div style={{ fontWeight: 800 }}>OT #{t.currentWork[0].idOT}</div>
                                                 <div style={{ opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.currentWork[0].clienteNombre}</div>

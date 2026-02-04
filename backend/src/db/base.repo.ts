@@ -22,6 +22,7 @@ const CONFIG = {
   LOG_FLUSH_INTERVAL_MS: 5000,
   MAX_LOG_QUEUE_SIZE: 500,
   MAX_TEXT_LEN: 4000, // Max NVarChar param size safety
+  RETRY_DELAY_MS: 2000, // Backoff for connection retries
 };
 
 const logger = new Logger('BaseRepo');
@@ -30,8 +31,14 @@ const logger = new Logger('BaseRepo');
 // SINGLETON POOL
 // ============================
 let poolPromise: Promise<sql.ConnectionPool> | null = null;
+let lastErrorTime = 0;
 
 async function getPool(): Promise<sql.ConnectionPool> {
+  // Simple Backoff Shield
+  if (!poolPromise && (Date.now() - lastErrorTime < CONFIG.RETRY_DELAY_MS)) {
+    throw new Error('SQL Connection in cool-down period.');
+  }
+
   if (!poolPromise) {
     poolPromise = obtenerPoolSql()
       .then((p) => {
@@ -43,8 +50,9 @@ async function getPool(): Promise<sql.ConnectionPool> {
       })
       .catch((err) => {
         logger.error('🔥 SQL Connection Warning:', err);
+        lastErrorTime = Date.now();
         resetPool();
-        throw err;
+        throw err; // Propagate error so caller handles it
       });
   }
   return poolPromise;
@@ -73,9 +81,9 @@ function isConnectionError(e: any): boolean {
 export type ParamInput =
   | any
   | {
-      valor: any;
-      tipo?: sql.ISqlType;
-    };
+    valor: any;
+    tipo?: sql.ISqlType;
+  };
 
 export type ParamsMap = Record<string, ParamInput>;
 
@@ -84,21 +92,35 @@ export type ParamsMap = Record<string, ParamInput>;
 // ============================
 const SENSITIVE_KEYS = ['password', 'clave', 'token', 'secret', 'credencial'];
 
-function sanitizeParamsForLog(params?: ParamsMap): any {
+function sanitizeParamsForLog(params?: any, depth = 0): any {
   if (!params) return null;
+  if (depth > 3) return '[MAX_DEPTH]'; // Prevent circular/deep recursion
+
+  if (typeof params !== 'object') return params;
+
+  // Handle Arrays
+  if (Array.isArray(params)) {
+    return params.map(i => sanitizeParamsForLog(i, depth + 1));
+  }
+
   const copy: any = {};
   for (const [key, val] of Object.entries(params)) {
     if (SENSITIVE_KEYS.some((k) => key.toLowerCase().includes(k))) {
       copy[key] = '[REDACTED]';
     } else {
-      // Extract clean value from object wrapper if needed
+      // Extract clean value from object wrapper if needed (specific to our ParamInput type)
       const raw =
-        val && typeof val === 'object' && 'valor' in val ? val.valor : val;
-      // Truncate huge strings for logs
-      copy[key] =
-        typeof raw === 'string' && raw.length > 500
-          ? raw.substring(0, 500) + '...[TRUNC]'
-          : raw;
+        val && typeof val === 'object' && 'valor' in val ? (val as any).valor : val;
+
+      if (typeof raw === 'object') {
+        copy[key] = sanitizeParamsForLog(raw, depth + 1);
+      } else {
+        // Truncate huge strings for logs
+        copy[key] =
+          typeof raw === 'string' && raw.length > 500
+            ? raw.substring(0, 500) + '...[TRUNC]'
+            : raw;
+      }
     }
   }
   return copy;
@@ -117,6 +139,7 @@ type SlowLogItem = {
 const logQueue: SlowLogItem[] = [];
 let flushTimer: NodeJS.Timeout | null = null;
 let slowTableExists = true; // Optimistic assumption
+let slowTableCheckTime = 0;
 
 function enqueueSlowLog(item: SlowLogItem) {
   if (logQueue.length >= CONFIG.MAX_LOG_QUEUE_SIZE) return; // Drop if full to protect memory
@@ -137,14 +160,20 @@ async function flushLogs() {
   try {
     const pool = await getPool();
 
-    // Check table existence lazily if previously failed or first run implies optimistic
-    if (!slowTableExists) return;
+    // Re-check table existence every minute if it failed previously
+    if (!slowTableExists && (Date.now() - slowTableCheckTime > 60000)) {
+      slowTableExists = true; // Retry optimistically
+      slowTableCheckTime = Date.now();
+    }
+
+    if (!slowTableExists) {
+      // Fallback to console immediately if we know table is missing
+      batch.forEach((b) => logger.warn(`[SLOW-SQL-CONSOLE] (${b.duration}ms) ${b.command}`));
+      return;
+    }
 
     // Construct Batch Insert (more efficient than N roundtrips)
     const request = pool.request();
-
-    // Note: This relies on the table existing. If not, we switch to console mode.
-    // Dynamic SQL construction for batch insert is safe here as we bind parameters
     let valuesClause = '';
 
     batch.forEach((log, index) => {
@@ -162,6 +191,8 @@ async function flushLogs() {
       valuesClause += `(@d${pIdx}, @s${pIdx}, @t${pIdx}, @p${pIdx}, GETDATE(), @o${pIdx}),`;
     });
 
+    if (valuesClause.length === 0) return;
+
     // Remove trailing comma
     valuesClause = valuesClause.slice(0, -1);
 
@@ -174,6 +205,7 @@ async function flushLogs() {
   } catch (error: any) {
     if (error?.message?.includes('Invalid object name')) {
       slowTableExists = false;
+      slowTableCheckTime = Date.now();
       logger.warn(
         '⚠️ Table Inv_sis_slow_queries not found. Dumping to console instead.',
       );

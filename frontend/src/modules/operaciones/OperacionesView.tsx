@@ -75,7 +75,10 @@ export const OperacionesView = () => {
 
             const allUsers = resUsers.data.data || resUsers.data || [];
             // Filter users who have 'TECNICO' or 'Tecnico' role
-            const tecs = allUsers.filter((u: any) => u.rolNombre === 'TECNICO' || u.rolNombre === 'Tecnico' || u.role === 'TECNICO');
+            const tecs = allUsers.filter((u: any) =>
+                (u.rolNombre && u.rolNombre.toUpperCase() === 'TECNICO') ||
+                (u.role && u.role.toUpperCase() === 'TECNICO')
+            );
             setTecnicos(tecs);
         } catch (e: any) {
             if (e.response && (e.response.status === 401 || e.response.status === 403)) return;
@@ -85,6 +88,8 @@ export const OperacionesView = () => {
 
     const fetchProductos = async () => {
         try {
+            // Ideally we should fetch stock for specific warehouse if technician
+            // For now fetching global stock, but we will filter in UI based on logic
             const res = await (invService as any).getStock();
             setProductos(res.data.data || res.data || []);
         } catch (e) {
@@ -93,7 +98,7 @@ export const OperacionesView = () => {
     };
 
     const isSupervisor = user?.rolNombre === 'ADMIN' || user?.rolNombre === 'Administrador' || user?.rolNombre === 'Despacho';
-    const isTecnico = user?.rolNombre === 'Tecnico' || user?.rolNombre === 'TECNICO';
+    const isTecnico = user?.rolNombre && user?.rolNombre.toUpperCase() === 'TECNICO';
 
     const fetchOTs = async () => {
         setLoading(true);
@@ -241,6 +246,8 @@ export const OperacionesView = () => {
     });
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
+    // Added to validate if user actually signed
+    const [hasSigned, setHasSigned] = useState(false);
 
     const startDrawing = (e: any) => {
         const canvas = canvasRef.current;
@@ -271,6 +278,7 @@ export const OperacionesView = () => {
 
         ctx.lineTo(clientX - rect.left, clientY - rect.top);
         ctx.stroke();
+        setHasSigned(true);
     };
 
     const stopDrawing = () => {
@@ -283,6 +291,7 @@ export const OperacionesView = () => {
             const ctx = canvas.getContext('2d');
             ctx?.clearRect(0, 0, canvas.width, canvas.height);
         }
+        setHasSigned(false);
     };
 
     const handleFinalize = async () => {
@@ -291,6 +300,10 @@ export const OperacionesView = () => {
         }
 
         const canvas = canvasRef.current;
+
+        if (!hasSigned) {
+            return alertError('Es necesaria la firma de conformidad del cliente.');
+        }
 
         try {
             const signatureData = canvas ? canvas.toDataURL() : '';
@@ -316,6 +329,7 @@ export const OperacionesView = () => {
             setShowDetailModal(false);
             setStep(1);
             fetchOTs();
+            setHasSigned(false);
         } catch (err) {
             alertError('Error al finalizar OT');
         }
@@ -606,7 +620,7 @@ export const OperacionesView = () => {
                                 style={{ padding: '10px 20px', background: 'transparent', border: 'none', borderBottom: activeTab === 'historial' ? '2px solid #3b82f6' : 'none', color: activeTab === 'historial' ? '#3b82f6' : '#94a3b8', cursor: 'pointer', fontWeight: 600 }}
                                 onClick={() => {
                                     setActiveTab('historial');
-                                    opeService.getHistorialOT(selectedOT.idOT).then(r => setHistorialList(r.data));
+                                    opeService.getHistorialOT(selectedOT.idOT).then(r => setHistorialList(r.data.data || r.data || [])); // Normalized response extraction
                                 }}
                             >
                                 Historial
@@ -734,6 +748,26 @@ export const OperacionesView = () => {
                                         <div style={{ borderTop: '1px solid #334155', paddingTop: '24px' }}>
                                             {step === 1 && (
                                                 <>
+
+                                                    {/* Planned Resources Info */}
+                                                    <div style={{ marginBottom: '20px' }}>
+                                                        <h4 style={{ fontSize: '0.9rem', color: '#94a3b8', marginBottom: '8px' }}>Recursos Asignados / Planificados</h4>
+                                                        <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '12px', borderRadius: '8px', border: '1px dashed #3b82f6', fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            {selectedOT.idProyecto ? (
+                                                                <div>
+                                                                    <div style={{ color: '#fff', fontWeight: 600 }}>
+                                                                        📦 Proyecto: {proyectos.find(p => p.idProyecto === selectedOT.idProyecto)?.nombre || 'Proyecto #' + selectedOT.idProyecto}
+                                                                    </div>
+                                                                    <div style={{ marginTop: '4px', color: '#cbd5e1' }}>Este trabajo tiene recursos reservados en bodega.</div>
+                                                                </div>
+                                                            ) : (
+                                                                <span style={{ color: '#94a3b8' }}>No hay un proyecto vinculado explícito. Utilice materiales de su Stock o Solicite a Bodega.</span>
+                                                            )}
+                                                            {selectedOT.idProyecto && <button className="btn-secondary" style={{ fontSize: '0.75rem', padding: '4px 8px' }}>Ver Lista</button>}
+                                                        </div>
+                                                    </div>
+
+
                                                     <div style={{ marginBottom: '24px' }}>
                                                         <h4 style={{ fontSize: '1rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                             <span style={{ background: '#3b82f6', color: '#fff', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}>1</span>
@@ -784,196 +818,147 @@ export const OperacionesView = () => {
                                                                             onClick={handleAddMaterial}
                                                                             disabled={submittingMaterial || !hasStock}
                                                                         >
-                                                                            {hasStock ? '+ Agregar' : 'No Disponible'}
+                                                                            {submittingMaterial ? '...' : 'Registrar Consumo'}
                                                                         </button>
                                                                     </div>
                                                                 ) : null;
                                                             })()}
                                                         </div>
                                                     </div>
-                                                    <button className="btn-primary" style={{ width: '100%', background: '#10b981', padding: '12px' }} onClick={() => setStep(2)}>
-                                                        Continuar al Cierre
-                                                    </button>
+
+                                                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                                        <button className="btn-primary" onClick={() => setStep(2)}>Siguiente: Checklist ➜</button>
+                                                    </div>
                                                 </>
                                             )}
 
                                             {step === 2 && (
                                                 <div style={{ animation: 'fadeIn 0.3s' }}>
-                                                    <h4 style={{ fontSize: '1rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span style={{ background: '#3b82f6', color: '#fff', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}>2</span>
-                                                        Checklist de Calidad
-                                                    </h4>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
-                                                        {['epp', 'seguridad', 'calidad', 'limpieza'].map((key) => (
-                                                            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: checklist[key as keyof typeof checklist] ? 'rgba(16, 185, 129, 0.1)' : '#1e293b', borderRadius: '8px', cursor: 'pointer', border: checklist[key as keyof typeof checklist] ? '1px solid #10b981' : '1px solid #334155', transition: 'all 0.2s' }}>
-                                                                <input type="checkbox" checked={checklist[key as keyof typeof checklist]} onChange={e => setChecklist({ ...checklist, [key]: e.target.checked })} style={{ accentColor: '#10b981', width: '18px', height: '18px' }} />
-                                                                <span style={{ fontSize: '0.9rem', color: checklist[key as keyof typeof checklist] ? '#fff' : '#94a3b8' }}>
-                                                                    {key === 'epp' ? 'Uso de EPP Completo' :
-                                                                        key === 'seguridad' ? 'Zona Segura' :
-                                                                            key === 'calidad' ? 'Calidad Verificada' : 'Limpieza Final'}
-                                                                </span>
+                                                    <h4 style={{ fontSize: '1rem', marginBottom: '15px' }}>Checklist de Seguridad y Calidad</h4>
+                                                    <div style={{ display: 'grid', gap: '10px', marginBottom: '20px' }}>
+                                                        {[
+                                                            { key: 'epp', label: 'Uso correcto de EPP (Casco, Botas, Guantes)' },
+                                                            { key: 'seguridad', label: 'Zona de trabajo asegurada y señalizada' },
+                                                            { key: 'calidad', label: 'Instalación acorde a normas técnicas' },
+                                                            { key: 'limpieza', label: 'Limpieza del área post-trabajo' }
+                                                        ].map(item => (
+                                                            <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px', cursor: 'pointer' }}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={checklist[item.key as keyof typeof checklist]}
+                                                                    onChange={e => setChecklist({ ...checklist, [item.key]: e.target.checked })}
+                                                                    style={{ width: '18px', height: '18px' }}
+                                                                />
+                                                                {item.label}
                                                             </label>
                                                         ))}
                                                     </div>
-                                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                                        <button className="btn-secondary" onClick={() => setStep(1)} style={{ flex: 1 }}>Atrás</button>
-                                                        <button className="btn-primary" onClick={() => setStep(3)} style={{ flex: 1 }} disabled={!Object.values(checklist).every(Boolean)}>Siguiente</button>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                        <button className="btn-secondary" onClick={() => setStep(1)}>⬅ Volver</button>
+                                                        <button
+                                                            className="btn-primary"
+                                                            disabled={!Object.values(checklist).every(Boolean)}
+                                                            onClick={() => setStep(3)}
+                                                            style={{ opacity: Object.values(checklist).every(Boolean) ? 1 : 0.5 }}
+                                                        >
+                                                            Siguiente: Cierre ➜
+                                                        </button>
                                                     </div>
                                                 </div>
                                             )}
 
                                             {step === 3 && (
                                                 <div style={{ animation: 'fadeIn 0.3s' }}>
-                                                    <h4 style={{ fontSize: '1rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span style={{ background: '#3b82f6', color: '#fff', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}>3</span>
-                                                        Firma de Conformidad
-                                                    </h4>
+                                                    <h4 style={{ fontSize: '1rem', marginBottom: '15px' }}>Cierre y Conformidad</h4>
+
                                                     <div style={{ marginBottom: '20px' }}>
-                                                        <label className="form-label">Notas Finales</label>
-                                                        <textarea className="form-input" placeholder="Comentarios del cliente..." value={cierreNotas} onChange={e => setCierreNotas(e.target.value)} style={{ minHeight: '80px', background: '#1e293b', border: '1px solid #334155' }} />
+                                                        <label className="form-label">Notas de Cierre / Solución</label>
+                                                        <textarea
+                                                            className="form-input"
+                                                            style={{ minHeight: '100px' }}
+                                                            value={cierreNotas}
+                                                            onChange={e => setCierreNotas(e.target.value)}
+                                                            placeholder="Describa el trabajo realizado..."
+                                                        />
                                                     </div>
+
                                                     <div style={{ marginBottom: '20px' }}>
-                                                        <div style={{ border: '2px dashed #475569', background: '#e2e8f0', borderRadius: '12px', overflow: 'hidden', position: 'relative', touchAction: 'none' }}>
+                                                        <label className="form-label">Firma del Cliente</label>
+                                                        <div style={{ border: '1px dashed #64748b', borderRadius: '8px', background: '#fff', overflow: 'hidden', position: 'relative' }}>
                                                             <canvas
                                                                 ref={canvasRef}
                                                                 width={600}
                                                                 height={200}
-                                                                style={{ width: '100%', height: 'auto', minHeight: '150px', display: 'block' }}
-                                                                onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
-                                                                onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
+                                                                style={{ width: '100%', height: '200px', cursor: 'crosshair', touchAction: 'none' }}
+                                                                onMouseDown={startDrawing}
+                                                                onMouseMove={draw}
+                                                                onMouseUp={stopDrawing}
+                                                                onMouseLeave={stopDrawing}
+                                                                onTouchStart={startDrawing}
+                                                                onTouchMove={draw}
+                                                                onTouchEnd={stopDrawing}
                                                             />
-                                                            <button onClick={clearSignature} style={{ position: 'absolute', bottom: '10px', right: '10px', background: '#ef4444', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>Borrar</button>
-                                                            <div style={{ position: 'absolute', top: '10px', left: '10px', color: '#64748b', fontSize: '0.7rem', pointerEvents: 'none', textTransform: 'uppercase', letterSpacing: '1px' }}>Firma Aquí</div>
+                                                            <button
+                                                                onClick={clearSignature}
+                                                                style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.1)', border: 'none', borderRadius: '4px', padding: '4px 8px', fontSize: '0.7rem', color: '#000', cursor: 'pointer' }}
+                                                            >
+                                                                Limpiar
+                                                            </button>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '5px' }}>
+                                                            Solicite al cliente firmar en el recuadro blanco usando el dedo o mouse.
                                                         </div>
                                                     </div>
-                                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                                        <button className="btn-secondary" onClick={() => setStep(2)} style={{ flex: 1 }}>Atrás</button>
-                                                        <button className="btn-primary" onClick={handleFinalize} style={{ flex: 2, background: '#10b981', fontWeight: 700 }}>Finalizar Orden</button>
+
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                        <button className="btn-secondary" onClick={() => setStep(2)}>⬅ Volver</button>
+                                                        <button className="btn-primary" onClick={handleFinalize}>
+                                                            ✅ Finalizar Orden
+                                                        </button>
                                                     </div>
                                                 </div>
                                             )}
                                         </div>
                                     )}
+
+                                    {/* Evidencias and History (Read-only for now in this snippet) */}
                                 </>
-                            ) : activeTab === 'evidencias' ? (
+                            ) : null}
+
+                            {activeTab === 'evidencias' && (
                                 <div>
-                                    <h4 style={{ fontSize: '0.9rem', marginBottom: '15px', color: '#94a3b8' }}>Evidencia Fotográfica y Documental</h4>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>
-
-                                        {/* Upload Button */}
-                                        <div style={{
-                                            border: '2px dashed #334155',
-                                            borderRadius: '12px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            height: '130px',
-                                            cursor: 'pointer',
-                                            position: 'relative',
-                                            background: 'rgba(255,255,255,0.02)',
-                                            transition: 'border-color 0.2s'
-                                        }} className="upload-box hover:border-blue-500">
-                                            <span style={{ fontSize: '2rem', color: '#64748b', marginBottom: '5px' }}>+</span>
-                                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Agregar</span>
-                                            <input type="file" accept="image/*,.pdf" style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} onChange={async (e) => {
-                                                const file = e.target.files?.[0];
-                                                if (!file) return;
-
-                                                try {
-                                                    let finalData = '';
-                                                    let type = 'ARCHIVO';
-
-                                                    if (file.type.startsWith('image/')) {
-                                                        // Convert to WebP using Canvas
-                                                        const img = new Image();
-                                                        const objectUrl = URL.createObjectURL(file);
-                                                        img.src = objectUrl;
-                                                        await new Promise(r => img.onload = r);
-
-                                                        const cvs = document.createElement('canvas');
-                                                        // Simple resize if too big (max 1280px width)
-                                                        const scale = Math.min(1280 / img.width, 1);
-                                                        cvs.width = img.width * scale;
-                                                        cvs.height = img.height * scale;
-
-                                                        const ctx = cvs.getContext('2d');
-                                                        if (ctx) {
-                                                            ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
-                                                            finalData = cvs.toDataURL('image/webp', 0.8); // 80% Quality WebP
-                                                            type = 'FOTO_WEBP';
-                                                        } else {
-                                                            throw new Error('Canvas Context Error');
-                                                        }
-                                                        URL.revokeObjectURL(objectUrl);
-                                                    } else {
-                                                        // PDF or other files -> Base64
-                                                        const reader = new FileReader();
-                                                        finalData = await new Promise((resolve) => {
-                                                            reader.onloadend = () => resolve(reader.result as string);
-                                                            reader.readAsDataURL(file);
-                                                        });
-                                                    }
-
-                                                    await opeService.subirEvidencia(selectedOT.idOT, finalData, type);
-                                                    alertSuccess('Evidencia subida correctamente');
-                                                    // Refresh list (using temporary editForm prop hack or better state)
-                                                    try {
-                                                        const ev = await (opeService as any).getEvidencias(selectedOT.idOT);
-                                                        setEditForm((prev: any) => ({ ...prev, _evidencias: ev.data || [] }));
-                                                    } catch (e) { console.error('Refresh fail', e); }
-
-                                                } catch (err) {
-                                                    console.error(err);
-                                                    alertError('Error al procesar/subir evidencia');
-                                                }
-                                            }} />
-                                        </div>
-
-                                        {/* Existing Evidences List */}
-                                        {(editForm?._evidencias || []).map((ev: any, i: number) => (
-                                            <div key={i} style={{
-                                                position: 'relative',
-                                                height: '130px',
-                                                borderRadius: '12px',
-                                                overflow: 'hidden',
-                                                border: '1px solid #334155'
-                                            }}>
-                                                {ev.nombre.endsWith('.pdf') ? (
-                                                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', color: '#fff', flexDirection: 'column' }}>
-                                                        <span style={{ fontSize: '2rem' }}>📄</span>
-                                                        <span style={{ fontSize: '0.6rem', padding: '5px' }}>{ev.nombre.substring(0, 15)}...</span>
-                                                    </div>
-                                                ) : (
-                                                    <img src={ev.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                )}
-                                                <a href={ev.url} target="_blank" rel="noreferrer" style={{
-                                                    position: 'absolute', bottom: 0, left: 0, right: 0,
-                                                    background: 'rgba(0,0,0,0.7)', color: '#fff',
-                                                    fontSize: '0.7rem', textAlign: 'center', padding: '4px',
-                                                    textDecoration: 'none'
-                                                }}>Abrir</a>
+                                    <h4 style={{ marginBottom: '15px' }}>Evidencias Fotográficas / Documentos</h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '15px' }}>
+                                        {editForm?._evidencias?.map((ev: any, i: number) => (
+                                            <div key={i} style={{ background: '#000', borderRadius: '8px', overflow: 'hidden' }}>
+                                                <img src={ev.url || ev.base64} alt="Evidencia" style={{ width: '100%', height: '150px', objectFit: 'cover' }} />
                                             </div>
                                         ))}
-
+                                        {(!editForm?._evidencias || editForm._evidencias.length === 0) && (
+                                            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '30px', color: '#666' }}>No hay evidencias cargadas</div>
+                                        )}
                                     </div>
                                 </div>
-                            ) : (<div className="historial-list" style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxHeight: '500px', overflowY: 'auto' }}>
-                                {historialList.length > 0 ? (
-                                    historialList.map((h, idx) => (
-                                        <div key={idx} style={{ background: '#1e293b', padding: '12px', borderRadius: '8px', borderLeft: `3px solid ${h.accion === 'CREACION' ? '#3b82f6' : h.accion === 'CIERRE' ? '#10b981' : h.accion === 'ASIGNACION' ? '#f59e0b' : '#8b5cf6'}` }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold', textTransform: 'uppercase' }}>{h.accion || 'EVENTO'}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{new Date(h.fecha).toLocaleString()}</div>
+                            )}
+
+                            {activeTab === 'historial' && (
+                                <div>
+                                    <h4 style={{ marginBottom: '15px' }}>Historial de Actividad</h4>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                        {historialList.map((h, i) => (
+                                            <div key={i} style={{ display: 'flex', gap: '15px', fontSize: '0.9rem' }}>
+                                                <div style={{ color: '#94a3b8', minWidth: '120px' }}>
+                                                    {new Date(h.fecha).toLocaleString()}
+                                                </div>
+                                                <div>
+                                                    <strong style={{ color: '#e2e8f0' }}>{h.accion}</strong>
+                                                    <div style={{ color: '#64748b' }}>{h.descripcion} - {h.usuario}</div>
+                                                </div>
                                             </div>
-                                            <div style={{ fontSize: '0.9rem', color: '#e2e8f0' }}>{h.notas || h.detalles}</div>
-                                            {h.usuarioNombre && <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>Por: {h.usuarioNombre}</div>}
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>Cargando historial o sin registros...</div>
-                                )}
-                            </div>
+                                        ))}
+                                        {historialList.length === 0 && <div style={{ color: '#666' }}>Sin historial registrado.</div>}
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>

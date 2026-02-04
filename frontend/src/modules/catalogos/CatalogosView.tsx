@@ -15,9 +15,10 @@ export const CatalogosView = () => {
     const [historyModalOpen, setHistoryModalOpen] = useState(false);
     const [clientHistory, setClientHistory] = useState<any[]>([]);
     const [selectedClient, setSelectedClient] = useState<any>(null);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     // Form States
-    const [formData, setFormData] = useState<any>({ nombre: '', codigo: '', esSerializado: false, costo: 0, idCategoria: '' });
+    const [formData, setFormData] = useState<any>({});
 
     const fetchData = async () => {
         setLoading(true);
@@ -32,13 +33,16 @@ export const CatalogosView = () => {
     };
 
     useEffect(() => {
+        // Reset form data when switching tabs to avoid stale data
+        setFormData({});
         fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab]);
 
     const handleViewHistory = async (client: any) => {
         setSelectedClient(client);
         setHistoryModalOpen(true);
-        setLoading(true);
+        setHistoryLoading(true);
         try {
             // Reusing the OTs endpoint filtering by client
             const res = await opeService.listarOTs({ idCliente: client.idCliente });
@@ -47,7 +51,7 @@ export const CatalogosView = () => {
             console.error(e);
             alertError('Error al cargar historial');
         } finally {
-            setLoading(false);
+            setHistoryLoading(false);
         }
     };
 
@@ -74,7 +78,7 @@ export const CatalogosView = () => {
         {
             key: 'costo',
             label: 'Costo',
-            render: (val: number) => <span style={{ fontWeight: 600 }}>${val.toFixed(2)}</span>
+            render: (val: number) => <span style={{ fontWeight: 600 }}>${Number(val).toFixed(2)}</span>
         },
         {
             key: 'esSerializado',
@@ -97,7 +101,11 @@ export const CatalogosView = () => {
             key: 'acciones',
             label: 'Stock',
             render: (_: any) => (
-                <a href="#consignacion" style={{ color: 'var(--primary)', textDecoration: 'underline', fontSize: '0.85rem' }}>
+                <a
+                    href="#consignacion"
+                    onClick={(e) => { e.preventDefault(); window.location.hash = 'consignacion'; }}
+                    style={{ color: 'var(--primary)', textDecoration: 'underline', fontSize: '0.85rem', cursor: 'pointer' }}
+                >
                     Ver Consignaciones
                 </a>
             )
@@ -172,17 +180,17 @@ export const CatalogosView = () => {
             >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     <FormGroup label="Nombre / Razón Social">
-                        <input type="text" className="form-input" value={formData.nombre} onChange={e => setFormData({ ...formData, nombre: e.target.value })} />
+                        <input type="text" className="form-input" value={formData.nombre || ''} onChange={e => setFormData({ ...formData, nombre: e.target.value })} />
                     </FormGroup>
 
                     {activeTab === 'productos' && (
                         <>
                             <FormGroup label="Código">
-                                <input type="text" className="form-input" value={formData.codigo} onChange={e => setFormData({ ...formData, codigo: e.target.value })} />
+                                <input type="text" className="form-input" value={formData.codigo || ''} onChange={e => setFormData({ ...formData, codigo: e.target.value })} />
                             </FormGroup>
                             <div style={{ display: 'flex', gap: '20px' }}>
                                 <FormGroup label="Costo" style={{ flex: 1 }}>
-                                    <input type="number" className="form-input" value={formData.costo} onChange={e => setFormData({ ...formData, costo: Number(e.target.value) })} />
+                                    <input type="number" className="form-input" value={formData.costo || 0} onChange={e => setFormData({ ...formData, costo: Number(e.target.value) })} />
                                 </FormGroup>
                                 <FormGroup label="Serializado" style={{ flex: 1 }}>
                                     <select className="form-input" value={formData.esSerializado ? '1' : '0'} onChange={e => setFormData({ ...formData, esSerializado: e.target.value === '1' })}>
@@ -197,19 +205,31 @@ export const CatalogosView = () => {
                     {(activeTab === 'proveedores' || activeTab === 'clientes') && (
                         <>
                             <FormGroup label="Persona de Contacto">
-                                <input type="text" className="form-input" value={formData.contactoNombre || formData.contacto} onChange={e => setFormData({ ...formData, contactoNombre: e.target.value, contacto: e.target.value })} />
+                                <input type="text" className="form-input" value={formData.contacto || formData.contactoNombre || ''} onChange={e => setFormData({ ...formData, contacto: e.target.value, contactoNombre: e.target.value })} />
                             </FormGroup>
                             <div style={{ display: 'flex', gap: '15px' }}>
                                 <FormGroup label="Teléfono" style={{ flex: 1 }}>
-                                    <input type="text" className="form-input" value={formData.telefono} onChange={e => setFormData({ ...formData, telefono: e.target.value })} />
+                                    <input type="text" className="form-input" value={formData.telefono || ''} onChange={e => setFormData({ ...formData, telefono: e.target.value })} />
                                 </FormGroup>
                                 <FormGroup label="Correo" style={{ flex: 1 }}>
-                                    <input type="text" className="form-input" value={formData.correo} onChange={e => setFormData({ ...formData, correo: e.target.value })} />
+                                    <input type="text" className="form-input" value={formData.correo || ''} onChange={e => setFormData({ ...formData, correo: e.target.value })} />
                                 </FormGroup>
                             </div>
-                            <FormGroup label="Dirección / NIT">
-                                <input type="text" className="form-input" value={formData.direccion || formData.nit} onChange={e => setFormData({ ...formData, direccion: e.target.value, nit: e.target.value })} />
-                            </FormGroup>
+
+                            {activeTab === 'proveedores' && (
+                                <FormGroup label="NIT / RUC">
+                                    <input type="text" className="form-input" value={formData.nit || ''} onChange={e => setFormData({ ...formData, nit: e.target.value })} />
+                                </FormGroup>
+                            )}
+
+                            {activeTab === 'clientes' && (
+                                <FormGroup label="Dirección Física">
+                                    <input type="text" className="form-input" value={formData.direccion || ''} onChange={e => setFormData({ ...formData, direccion: e.target.value })} />
+                                </FormGroup>
+                            )}
+
+                            {/* Fallback for mixed fields if needed */}
+                            {(activeTab === 'proveedores' && !formData.nit && formData.direccion) && setFormData({ ...formData, nit: formData.direccion })}
                         </>
                     )}
                 </div>
@@ -233,6 +253,7 @@ export const CatalogosView = () => {
                             { key: 'prioridad', label: 'Prior.', render: (v: string) => <span style={{ color: v === 'CRITICA' ? '#ef4444' : '#fff' }}>{v}</span> }
                         ]}
                         data={clientHistory}
+                        loading={historyLoading}
                         description={`Total de ${clientHistory.length} atenciones registradas.`}
                     />
                 </div>

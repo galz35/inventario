@@ -51,7 +51,7 @@ export const VehiculosView = () => {
                 vehService.getVehiculos(),
                 authService.getUsers()
             ]);
-            setVehiculos(vRes.data || []);
+            setVehiculos(vRes.data.data || vRes.data || []);
 
             let users = uRes.data?.data || uRes.data || [];
             if (users.data) users = users.data;
@@ -70,23 +70,35 @@ export const VehiculosView = () => {
             alertSuccess('Vehículo guardado correctamente');
             setIsVehiculoModalOpen(false);
             loadData();
-        } catch (err) {
-            alertError('Error al guardar vehículo');
+        } catch (err: any) {
+            alertError('Error al guardar vehículo', err.message);
         }
     };
 
     const handleSaveLog = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Validation
+        const kmIn = parseFloat(newLog.kmEntrada);
+        const kmOut = parseFloat(newLog.kmSalida);
+        const fuel = parseFloat(newLog.gastoCombustible);
+
+        if (isNaN(kmIn) || isNaN(kmOut)) return alertError('Valores incorrectos', 'Kilometraje debe ser numérico');
+        if (kmOut < kmIn) return alertError('Error', 'El KM de Salida no puede ser menor al de Entrada');
+
         try {
             await vehService.registrarLog({
                 ...newLog,
+                kmEntrada: kmIn,
+                kmSalida: kmOut,
+                gastoCombustible: fuel || 0,
                 idVehiculo: currentVehiculo.idVehiculo
             });
             alertSuccess('Registro diario guardado');
             setIsLogModalOpen(false);
             setNewLog({ kmEntrada: '', kmSalida: '', gastoCombustible: '', numeroVoucher: '', urlVoucher: '' });
-        } catch (err) {
-            alertError('Error al registrar log');
+        } catch (err: any) {
+            alertError('Error al registrar log', err.message);
         }
     };
 
@@ -94,7 +106,7 @@ export const VehiculosView = () => {
         setCurrentVehiculo(vehiculo);
         try {
             const res = await vehService.getLogs(vehiculo.idVehiculo);
-            setLogs(res.data || []);
+            setLogs(res.data.data || res.data || []);
             setIsHistoryModalOpen(true);
         } catch (err) {
             alertError('Error al cargar historial');

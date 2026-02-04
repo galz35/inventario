@@ -23,6 +23,7 @@ export const TransferenciasView = () => {
     const [selectedProducto, setSelectedProducto] = useState('');
     const [cantidad, setCantidad] = useState(1);
 
+    // Normalize Role Check
     const isTecnico = user?.rolNombre?.toUpperCase() === 'TECNICO';
 
     useEffect(() => {
@@ -51,7 +52,8 @@ export const TransferenciasView = () => {
             const res = await (invService as any).getTransferencias();
             let data = res.data.data || res.data || [];
 
-            if (activeUser?.rolNombre === 'Tecnico' || activeUser?.rolNombre === 'TECNICO') {
+            const role = (activeUser?.rolNombre || '').toUpperCase();
+            if (role === 'TECNICO') {
                 data = data.filter((t: any) =>
                     t.almacenDestinoId === activeUser.idAlmacenTecnico ||
                     t.almacenOrigenId === activeUser.idAlmacenTecnico
@@ -78,25 +80,30 @@ export const TransferenciasView = () => {
 
     const handleOpenCreate = () => {
         if (isTecnico && user.idAlmacenTecnico) {
+            // If technician has no explicit origin warehouse assigned, default to 1 (Central) or handle gracefully
+            const originId = user.idAlmacen?.toString() || '1';
             setTransferData({
-                almacenOrigenId: user.idAlmacen?.toString() || '',
+                almacenOrigenId: originId,
                 almacenDestinoId: user.idAlmacenTecnico?.toString() || '',
                 notas: 'Solicitud de reposición para cuadrilla',
                 detalles: []
             });
-            if (user.idAlmacen) fetchStockOrigen(user.idAlmacen.toString());
+            fetchStockOrigen(originId);
         } else {
             setTransferData({ almacenOrigenId: '', almacenDestinoId: '', notas: '', detalles: [] });
+            setAvailableStock([]); // Clear previous stock
         }
         setShowCreateModal(true);
     };
 
     const addItem = () => {
-        if (!selectedProducto || cantidad <= 0) return;
+        if (!selectedProducto || cantidad <= 0) return alertError('Seleccione producto y cantidad válida');
+        if (!Number.isInteger(cantidad)) return alertError('La cantidad debe ser un número entero');
+
         const prod = availableStock.find(p => p.productoId.toString() === selectedProducto);
         if (!prod) return;
 
-        if (prod.cantidad < cantidad) return alertError('Stock insuficiente en origen');
+        if (prod.cantidad < cantidad) return alertError(`Stock insuficiente en origen (Disp: ${prod.cantidad})`);
         if (transferData.detalles.some(d => d.productoId === prod.productoId)) return alertError('El producto ya está en la lista');
 
         setTransferData(prev => ({
@@ -140,17 +147,21 @@ export const TransferenciasView = () => {
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [details, setDetails] = useState<any[]>([]);
     const [selectedTransfer, setSelectedTransfer] = useState<any>(null);
+    const [loadingDetails, setLoadingDetails] = useState(false);
 
     const handleViewDetails = async (row: any) => {
         setSelectedTransfer(row);
         setDetails([]);
         setShowDetailModal(true);
+        setLoadingDetails(true);
         try {
             const res = await invService.getTransferenciaDetalles(row.idTransferencia);
             setDetails(res.data.data || res.data || []);
         } catch (e) {
             console.error(e);
-            setDetails([]); // Clear or show error
+            setDetails([]);
+        } finally {
+            setLoadingDetails(false);
         }
     };
 
@@ -209,7 +220,6 @@ export const TransferenciasView = () => {
                 }
             />
 
-            {/* Create Modal - Existing code ... (omitted for brevity, assume strictly kept same, just verify context if replacing whole block) */}
             <Modal
                 isOpen={showCreateModal}
                 onClose={() => setShowCreateModal(false)}
@@ -220,7 +230,6 @@ export const TransferenciasView = () => {
                     <button className="btn-primary" onClick={handleSend} disabled={loading}>{loading ? 'Procesando...' : 'Confirmar Traslado'}</button>
                 </>}
             >
-                {/* ... same form content ... */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
                     <div>
                         <label className="form-label">ALMACÉN ORIGEN</label>
@@ -258,7 +267,7 @@ export const TransferenciasView = () => {
                             <option value="">-- Buscar Producto --</option>
                             {availableStock.map(p => <option key={p.productoId} value={p.productoId}>{p.productoNombre} ({p.cantidad} disp.)</option>)}
                         </select>
-                        <input type="number" className="form-input" style={{ flex: 1 }} placeholder="Cant." value={cantidad} onChange={e => setCantidad(Number(e.target.value))} />
+                        <input type="number" className="form-input" style={{ flex: 1 }} placeholder="Cant." min="1" value={cantidad} onChange={e => setCantidad(Number(e.target.value))} />
                         <button className="btn-secondary" onClick={addItem}>Añadir</button>
                     </div>
                 </div>
@@ -272,22 +281,25 @@ export const TransferenciasView = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {transferData.detalles.map((d, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid #222' }}>
-                                <td style={{ padding: '10px' }}>{d.nombre}</td>
-                                <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>{d.cantidad}</td>
-                                <td style={{ padding: '10px', textAlign: 'right' }}>
-                                    <button style={{ background: 'transparent', border: 'none', color: '#ff4d4d', cursor: 'pointer' }} onClick={() => setTransferData({ ...transferData, detalles: transferData.detalles.filter((_, idx) => idx !== i) })}>✕</button>
-                                </td>
-                            </tr>
-                        ))}
+                        {transferData.detalles.length === 0 ? (
+                            <tr><td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: '#666' }}>Sin ítems agregados</td></tr>
+                        ) : (
+                            transferData.detalles.map((d, i) => (
+                                <tr key={i} style={{ borderBottom: '1px solid #222' }}>
+                                    <td style={{ padding: '10px' }}>{d.nombre}</td>
+                                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>{d.cantidad}</td>
+                                    <td style={{ padding: '10px', textAlign: 'right' }}>
+                                        <button style={{ background: 'transparent', border: 'none', color: '#ff4d4d', cursor: 'pointer' }} onClick={() => setTransferData({ ...transferData, detalles: transferData.detalles.filter((_, idx) => idx !== i) })}>✕</button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
 
                 <textarea className="form-input" value={transferData.notas} onChange={e => setTransferData({ ...transferData, notas: e.target.value })} placeholder="Notas del traslado..." style={{ minHeight: '80px' }} />
             </Modal>
 
-            {/* Details Modal */}
             <Modal
                 isOpen={showDetailModal}
                 onClose={() => setShowDetailModal(false)}
@@ -298,24 +310,34 @@ export const TransferenciasView = () => {
                         <div>Origen: <b style={{ color: 'white' }}>{selectedTransfer?.almacenOrigenNombre}</b></div>
                         <div>Destino: <b style={{ color: 'white' }}>{selectedTransfer?.almacenDestinoNombre}</b></div>
                     </div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ borderBottom: '1px solid #444', textAlign: 'left' }}>
-                                <th style={{ padding: '8px' }}>Código</th>
-                                <th style={{ padding: '8px' }}>Producto</th>
-                                <th style={{ padding: '8px', textAlign: 'right' }}>Cantidad</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {details.map((d: any, i: number) => (
-                                <tr key={i} style={{ borderBottom: '1px solid #333' }}>
-                                    <td style={{ padding: '8px', fontSize: '0.85rem', color: '#888' }}>{d.productoCodigo}</td>
-                                    <td style={{ padding: '8px' }}>{d.productoNombre}</td>
-                                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{d.cantidad}</td>
+
+                    {loadingDetails ? (
+                        <div style={{ textAlign: 'center', padding: '20px' }}>Cargando detalles...</div>
+                    ) : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '1px solid #444', textAlign: 'left' }}>
+                                    <th style={{ padding: '8px' }}>Código</th>
+                                    <th style={{ padding: '8px' }}>Producto</th>
+                                    <th style={{ padding: '8px', textAlign: 'right' }}>Cantidad</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {details.length === 0 ? (
+                                    <tr><td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: '#666' }}>No hay detalles disponibles</td></tr>
+                                ) : (
+                                    details.map((d: any, i: number) => (
+                                        <tr key={i} style={{ borderBottom: '1px solid #333' }}>
+                                            <td style={{ padding: '8px', fontSize: '0.85rem', color: '#888' }}>{d.productoCodigo}</td>
+                                            <td style={{ padding: '8px' }}>{d.productoNombre}</td>
+                                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{d.cantidad}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    )}
+
                     <div style={{ marginTop: '20px', fontSize: '0.85rem', color: '#666' }}>
                         <p>Notas: {selectedTransfer?.notas || 'Sin notas.'}</p>
                     </div>

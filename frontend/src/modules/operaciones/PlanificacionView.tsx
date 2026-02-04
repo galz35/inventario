@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { invService, planService } from '../../services/api.service';
+import { invService, planService, authService } from '../../services/api.service';
 import { alertSuccess, alertError } from '../../services/alert.service';
 import { Modal } from '../../components/Modal';
 import { DataTable } from '../../components/DataTable';
@@ -49,23 +49,21 @@ export const PlanificacionView = () => {
     const fetchCatalogs = async () => {
         try {
             const [resP, resU] = await Promise.all([
-                invService.getStock(), // or getCatalog('productos')
-                invService.getCatalog('usuarios')
+                invService.getStock(),
+                authService.getUsers()
             ]);
             setProductos(resP.data.data || resP.data || []);
             setUsers(resU.data.data || resU.data || []);
         } catch (e: any) {
-            if (e.response && e.response.status === 401) return;
-            console.warn('Error catalogs', e);
+            console.warn('Error fetching catalogs', e);
         }
     };
 
     const fetchProyectos = async () => {
         try {
             const res = await planService.getProyectos();
-            setProyectos(res.data.data || res.data);
+            setProyectos(res.data.data || res.data || []);
         } catch (err: any) {
-            if (err.response && err.response.status === 401) return;
             console.error(err);
         }
     };
@@ -77,10 +75,13 @@ export const PlanificacionView = () => {
                 planService.getWBS(id),
                 planService.getHistorial(id)
             ]);
-            setWbs(resWbs.data.data || resWbs.data);
+            setWbs(resWbs.data.data || resWbs.data || []);
             setHistory(resHist.data.data || resHist.data || []);
-        } catch (err) {
-            alertError('Error al cargar datos');
+        } catch (err: any) {
+            console.error(err);
+            const status = err.response?.status;
+            const msg = err.response?.data?.message || err.message;
+            alertError(`Error al cargar datos del proyecto (${status || 'N/A'}): ${msg}`);
         } finally {
             setLoading(false);
         }
@@ -92,19 +93,23 @@ export const PlanificacionView = () => {
         try {
             if (formProject.idProyecto) {
                 await planService.updateProyecto(formProject.idProyecto, formProject);
-                alertSuccess('Proyecto actualizado');
+                alertSuccess('Proyecto actualizado exitosamente');
                 if (selectedProyecto?.idProyecto === formProject.idProyecto) {
                     setSelectedProyecto({ ...selectedProyecto, ...formProject });
                 }
             } else {
                 await planService.createProyecto(formProject);
-                alertSuccess('Proyecto creado');
+                alertSuccess('Proyecto creado exitosamente');
             }
             setShowProjectModal(false);
             setFormProject({ idProyecto: null, nombre: '', descripcion: '', fechaInicio: '', idResponsable: '' });
             fetchProyectos();
-        } catch (e) { alertError('Error al guardar proyecto'); }
-        finally { setProcessing(false); }
+        } catch (e) {
+            console.error(e);
+            alertError('No se pudo guardar el proyecto. Verifique los datos.');
+        } finally {
+            setProcessing(false);
+        }
     };
 
     const handleEditProyecto = (p: any) => {

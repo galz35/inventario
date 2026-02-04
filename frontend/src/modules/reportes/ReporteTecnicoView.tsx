@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
-import { Calendar, FileText } from 'lucide-react';
+import { Calendar, FileText, Search } from 'lucide-react';
 import { alertError } from '../../services/alert.service';
 
 export const ReporteTecnicoView = () => {
@@ -11,7 +11,7 @@ export const ReporteTecnicoView = () => {
 
     useEffect(() => {
         loadReport();
-    }, [date]);
+    }, []); // Load once on mount, then user clicks search
 
     const loadReport = async () => {
         setLoading(true);
@@ -28,7 +28,8 @@ export const ReporteTecnicoView = () => {
 
     // Calculate totals
     const totalItems = data.length;
-    const consignedItems = data.filter((d: any) => d.proveedorConsignado).length;
+    // Normalize consigned check
+    const consignedItems = data.filter((d: any) => d.proveedorConsignado || d.esConsignacion).length;
 
     return (
         <div className="animate-fade" style={{ padding: '20px' }}>
@@ -37,15 +38,18 @@ export const ReporteTecnicoView = () => {
                     <FileText /> Reporte de Consumo Técnico (Detalle Diario)
                 </h2>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                    <div className="input-group" style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', padding: '5px 10px', borderRadius: '8px' }}>
+                    <div className="input-group" style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary)', padding: '5px 10px', borderRadius: '8px', gap: '10px' }}>
                         <Calendar size={16} />
                         <input
                             type="date"
                             className="form-input"
-                            style={{ border: 'none', background: 'transparent' }}
+                            style={{ border: 'none', background: 'transparent', color: '#fff' }}
                             value={date}
                             onChange={e => setDate(e.target.value)}
                         />
+                        <button className="btn-primary" onClick={loadReport} disabled={loading} style={{ padding: '6px 12px', fontSize: '0.8rem', height: '30px' }}>
+                            <Search size={14} style={{ marginRight: '5px' }} /> Consultar
+                        </button>
                     </div>
                 </div>
             </div>
@@ -64,13 +68,13 @@ export const ReporteTecnicoView = () => {
             <DataTable
                 data={data}
                 loading={loading}
-                title="Desglose por Técnico y OT"
+                title={`Desglose del día ${new Date(date).toLocaleDateString()}`}
                 columns={[
                     { key: 'tecnicoNombre', label: 'Técnico' },
                     { key: 'proyectoNombre', label: 'Proyecto', render: (v: any) => <span style={{ fontWeight: 600 }}>{v || '-'}</span> },
                     { key: 'otCodigo', label: 'OT Ref.', render: (v: any) => <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>OT-{v}</span> },
-                    { key: 'productoNombre', label: 'Material', render: (v, r) => <div>{v}<br /><small style={{ color: '#666' }}>{r.productoCodigo}</small></div> },
-                    { key: 'cantidad', label: 'Cant.', render: (v) => <b>{v}</b> },
+                    { key: 'productoNombre', label: 'Material', render: (v: any, r: any) => <div>{v}<br /><small style={{ color: '#666' }}>{r.productoCodigo}</small></div> },
+                    { key: 'cantidad', label: 'Cant.', render: (v: any) => <b>{v}</b> },
                     { key: 'fechaCierre', label: 'Hora', render: (v: string) => v ? new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-' }
                 ]}
             />

@@ -15,7 +15,7 @@ export const AuthView = ({ onLogin }: { onLogin: (user: any) => void }) => {
             // El backend devuelve { success, data, statusCode ... }
             const loginData = res.data.data || res.data;
 
-            if (loginData.access_token || loginData.token) {
+            if ((loginData.access_token || loginData.token) && loginData.user && loginData.user.idUsuario) {
                 const token = loginData.access_token || loginData.token;
                 localStorage.setItem('inv_token', token);
                 localStorage.setItem('inv_user', JSON.stringify(loginData.user));
@@ -23,7 +23,7 @@ export const AuthView = ({ onLogin }: { onLogin: (user: any) => void }) => {
                 onLogin(loginData.user);
             } else {
                 console.error('Login Response Data:', loginData);
-                alertError('Error', 'No se recibió el token de acceso');
+                alertError('Error', 'Respuesta de servidor incompleta (falta token o usuario).');
             }
         } catch (err: any) {
             let msg = 'Credenciales inválidas';
@@ -37,6 +37,8 @@ export const AuthView = ({ onLogin }: { onLogin: (user: any) => void }) => {
             setLoading(false);
         }
     };
+
+    const isFormValid = correo.trim().length > 0 && password.trim().length > 0;
 
     return (
         <div style={{
@@ -89,7 +91,7 @@ export const AuthView = ({ onLogin }: { onLogin: (user: any) => void }) => {
                         required
                         value={correo}
                         onChange={(e) => setCorreo(e.target.value)}
-                        style={{ width: '100%' }}
+                        style={{ width: '100%', border: correo && !correo.includes('@') && !correo.match(/^C\d+/) ? '1px solid #ef4444' : '' }}
                         placeholder="ej. usuario@empresa.com o C12345"
                     />
                 </div>
@@ -109,9 +111,9 @@ export const AuthView = ({ onLogin }: { onLogin: (user: any) => void }) => {
                 </div>
 
                 <button
-                    disabled={loading}
+                    disabled={loading || !isFormValid}
                     className="btn-primary"
-                    style={{ width: '100%', padding: '14px', fontSize: '1rem' }}
+                    style={{ width: '100%', padding: '14px', fontSize: '1rem', opacity: loading || !isFormValid ? 0.6 : 1, cursor: loading || !isFormValid ? 'not-allowed' : 'pointer' }}
                 >
                     {loading ? 'Verificando...' : 'Acceder al Sistema'}
                 </button>

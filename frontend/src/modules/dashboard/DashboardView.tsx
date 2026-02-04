@@ -9,6 +9,16 @@ import {
 } from 'lucide-react';
 import { invService, opeService } from '../../services/api.service';
 
+interface StatBoxProps {
+    title: string;
+    value: string | number;
+    subtext: string;
+    icon: any;
+    trend?: number;
+    color: string;
+    onClick?: () => void;
+}
+
 const Card = ({ children, className = '' }: any) => (
     <div className={`card ${className}`} style={{
         background: '#1e293b',
@@ -21,7 +31,7 @@ const Card = ({ children, className = '' }: any) => (
     </div>
 );
 
-const StatBox = ({ title, value, subtext, icon: Icon, trend, color, onClick }: any) => (
+const StatBox = ({ title, value, subtext, icon: Icon, trend, color, onClick }: StatBoxProps) => (
     <Card
         className={onClick ? 'clickable-card' : ''}
         style={{ cursor: onClick ? 'pointer' : 'default', transition: 'transform 0.2s' }}
@@ -60,10 +70,13 @@ const StatBox = ({ title, value, subtext, icon: Icon, trend, color, onClick }: a
 );
 
 export const DashboardView = ({ user, onNavigate }: { user: any, onNavigate: (view: string) => void }) => {
-    const [metrics, setMetrics] = useState<any>(null);
+    const [metrics, setMetrics] = useState<any>({});
     const [recentActivity, setRecentActivity] = useState<any[]>([]);
     const [otStats, setOtStats] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+
+    // Separate loading states to avoid blocking full UI
+    const [loadingMetrics, setLoadingMetrics] = useState(true);
+    const [loadingActivity, setLoadingActivity] = useState(true);
 
     // Mock Data for Charts (Simulating historical data if not available)
     const inventoryTrend = [
@@ -76,75 +89,82 @@ export const DashboardView = ({ user, onNavigate }: { user: any, onNavigate: (vi
     ];
 
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                // Parallel fetching of dashboard data
-                const [metricsRes, activityRes, otRes] = await Promise.all([
-                    (invService as any).getDashboardMetrics().catch(() => ({ data: {} })),
-                    invService.getTransferencias().catch(() => ({ data: [] })),
-                    opeService.listarOTs().catch(() => ({ data: [] }))
-                ]);
+        fetchMetrics();
+        fetchActivity();
+    }, []);
 
-                setMetrics(metricsRes.data.data || metricsRes.data || {});
+    const fetchMetrics = async () => {
+        setLoadingMetrics(true);
+        try {
+            // Metrics and OTs
+            const [metricsRes, otRes] = await Promise.all([
+                (invService as any).getDashboardMetrics().catch(() => ({ data: {} })),
+                opeService.listarOTs().catch(() => ({ data: [] }))
+            ]);
 
-                // Process Recent Activity (Transfers)
-                const activities = (activityRes.data.data || activityRes.data || [])
-                    .slice(0, 5) // Last 5
-                    .map((item: any) => ({
+            const metricData = metricsRes.data.data || metricsRes.data || {};
+            setMetrics(metricData);
+
+            const ots = otRes.data.data || otRes.data || [];
+            const statusCounts = ots.reduce((acc: any, curr: any) => {
+                const status = curr.estado || 'Pendiente';
+                acc[status] = (acc[status] || 0) + 1;
+                return acc;
+            }, {});
+
+            const chartData = Object.keys(statusCounts).map(key => ({
+                name: key,
+                value: statusCounts[key]
+            }));
+
+            setOtStats(chartData.length > 0 ? chartData : [{ name: 'Sin Datos', value: 1 }]);
+
+        } catch (e) {
+            console.error('Error fetching metrics', e);
+        } finally {
+            setLoadingMetrics(false);
+        }
+    };
+
+    const fetchActivity = async () => {
+        setLoadingActivity(true);
+        try {
+            const activityRes = await invService.getTransferencias().catch(() => ({ data: [] }));
+            const rawActivities = activityRes.data.data || activityRes.data || [];
+
+            const activities = rawActivities
+                .slice(0, 5) // Last 5
+                .map((item: any) => {
+                    // Safe date parsing
+                    const dateObj = new Date(item.fechaCreation || item.fecha || Date.now());
+                    const validDate = isNaN(dateObj.getTime()) ? new Date() : dateObj;
+
+                    return {
                         id: item.idTransferencia,
                         ref: `#TRF-${item.idTransferencia}`,
                         type: 'Transferencia',
-                        detail: `De ${item.origenNombre} a ${item.destinoNombre}`,
+                        detail: `De ${item.origenNombre || 'Origen'} a ${item.destinoNombre || 'Destino'}`,
                         user: item.usuarioNombre || 'Sistema',
-                        time: new Date(item.fechaCreation),
-                        status: item.estado
-                    }));
-                setRecentActivity(activities);
+                        time: validDate,
+                        status: item.estado || 'PENDIENTE'
+                    };
+                });
+            setRecentActivity(activities);
+        } catch (e) {
+            console.error('Error fetching activity', e);
+        } finally {
+            setLoadingActivity(false);
+        }
+    };
 
-                // Process OT Stats
-                const ots = otRes.data.data || otRes.data || [];
-                const statusCounts = ots.reduce((acc: any, curr: any) => {
-                    const status = curr.estado || 'Pendiente';
-                    acc[status] = (acc[status] || 0) + 1;
-                    return acc;
-                }, {});
-
-                const chartData = Object.keys(statusCounts).map(key => ({
-                    name: key,
-                    value: statusCounts[key]
-                }));
-
-                // Fallback if no OTs
-                setOtStats(chartData.length > 0 ? chartData : [
-                    { name: 'Sin Datos', value: 1 }
-                ]);
-
-            } catch (err) {
-                console.error('Error fetching dashboard data', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
 
     const COLORS = ['#94a3b8', '#3b82f6', '#10b981', '#ef4444', '#f59e0b'];
 
-    if (loading) return (
-        <div style={{
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#94a3b8',
-            flexDirection: 'column',
-            gap: '15px'
-        }}>
-            <div className="spinner"></div>
-            Cargando inteligencia de negocios...
-        </div>
-    );
+    const formatCurrency = (val: any) => {
+        const num = Number(val);
+        if (isNaN(num)) return '$0.0k';
+        return `$${(num / 1000).toFixed(1)}k`;
+    };
 
     return (
         <div style={{ animation: 'fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}>
@@ -176,7 +196,7 @@ export const DashboardView = ({ user, onNavigate }: { user: any, onNavigate: (vi
             }}>
                 <StatBox
                     title="Valor Inventario"
-                    value={`$${((metrics?.valorInventario || 0) / 1000).toFixed(1)}k`}
+                    value={loadingMetrics ? '...' : formatCurrency(metrics?.valorInventario)}
                     subtext="Capital Actual"
                     icon={DollarSign}
                     color="16, 185, 129"
@@ -184,7 +204,7 @@ export const DashboardView = ({ user, onNavigate }: { user: any, onNavigate: (vi
                 />
                 <StatBox
                     title="OTs Pendientes"
-                    value={otStats.find(s => s.name === 'Pendiente' || s.name === 'ABIERTA')?.value || 0}
+                    value={loadingMetrics ? '...' : (otStats.find(s => s.name === 'Pendiente' || s.name === 'ABIERTA')?.value || 0)}
                     subtext="Atención Requerida"
                     icon={ClipboardList}
                     color="59, 130, 246"
@@ -192,7 +212,7 @@ export const DashboardView = ({ user, onNavigate }: { user: any, onNavigate: (vi
                 />
                 <StatBox
                     title="Transferencias"
-                    value={recentActivity.filter(a => a.status === 'PENDIENTE').length}
+                    value={loadingActivity ? '...' : recentActivity.filter(a => a.status === 'PENDIENTE').length}
                     subtext="Por confirmar"
                     icon={TrendingUp}
                     color="245, 158, 11"
@@ -200,7 +220,7 @@ export const DashboardView = ({ user, onNavigate }: { user: any, onNavigate: (vi
                 />
                 <StatBox
                     title="Alertas Stock"
-                    value={metrics?.alertasStock || 0}
+                    value={loadingMetrics ? '...' : (metrics?.alertasStock || 0)}
                     subtext="Bajo Mínimo"
                     icon={AlertTriangle}
                     color="239, 68, 68"
@@ -244,35 +264,43 @@ export const DashboardView = ({ user, onNavigate }: { user: any, onNavigate: (vi
 
                 <Card>
                     <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '20px' }}>Estado de Órdenes (OT)</h3>
-                    <div style={{ height: '200px', marginBottom: '20px' }}>
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                            <PieChart>
-                                <Pie
-                                    data={otStats}
-                                    innerRadius={55}
-                                    outerRadius={75}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {otStats.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip contentStyle={{ background: '#1e293b', borderColor: '#334155', borderRadius: '8px' }} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                        {otStats.map((item, index) => (
-                            <div key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#cbd5e1', background: 'rgba(255,255,255,0.02)', padding: '8px', borderRadius: '8px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: COLORS[index % COLORS.length] }}></div>
-                                    {item.name}
-                                </div>
-                                <span style={{ fontWeight: 700 }}>{item.value}</span>
+                    {loadingMetrics ? (
+                        <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div className="spinner"></div>
+                        </div>
+                    ) : (
+                        <>
+                            <div style={{ height: '200px', marginBottom: '20px' }}>
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                    <PieChart>
+                                        <Pie
+                                            data={otStats}
+                                            innerRadius={55}
+                                            outerRadius={75}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
+                                            {otStats.map((_, index) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip contentStyle={{ background: '#1e293b', borderColor: '#334155', borderRadius: '8px' }} />
+                                    </PieChart>
+                                </ResponsiveContainer>
                             </div>
-                        ))}
-                    </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                {otStats.map((item, index) => (
+                                    <div key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#cbd5e1', background: 'rgba(255,255,255,0.02)', padding: '8px', borderRadius: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: COLORS[index % COLORS.length] }}></div>
+                                            {item.name}
+                                        </div>
+                                        <span style={{ fontWeight: 700 }}>{item.value}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </Card>
             </div>
 
@@ -301,7 +329,13 @@ export const DashboardView = ({ user, onNavigate }: { user: any, onNavigate: (vi
                             </tr>
                         </thead>
                         <tbody>
-                            {recentActivity.length > 0 ? (
+                            {loadingActivity ? (
+                                <tr>
+                                    <td colSpan={6} style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>
+                                        Cargando actividad...
+                                    </td>
+                                </tr>
+                            ) : recentActivity.length > 0 ? (
                                 recentActivity.map((item, i) => (
                                     <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                                         <td style={{ padding: '15px 24px', fontFamily: 'monospace', color: '#60a5fa', fontWeight: 700 }}>{item.ref}</td>

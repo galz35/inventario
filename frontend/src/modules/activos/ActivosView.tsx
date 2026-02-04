@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { activosService, invService } from '../../services/api.service';
-import { Search, User, Box, History, Filter, Plus } from 'lucide-react';
+import { Search, User, Box, History, Filter, Plus, ShieldCheck } from 'lucide-react';
 import { SidePanel } from '../../components/SidePanel';
 import { KardexTimeline } from '../inventario/components/KardexTimeline';
 import { Modal } from '../../components/Modal';
@@ -14,6 +14,10 @@ export const ActivosView = () => {
     // Data List
     const [activos, setActivos] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+
+    // User & Filters
+    const [user, setUser] = useState<any>(null);
+    const [showMyAssets, setShowMyAssets] = useState(false);
 
     // Details / History
     const [selectedActivo, setSelectedActivo] = useState<any>(null);
@@ -34,9 +38,27 @@ export const ActivosView = () => {
     const [almacenes, setAlmacenes] = useState<any[]>([]);
 
     useEffect(() => {
-        fetchActivos();
+        const u = localStorage.getItem('inv_user');
+        if (u) {
+            const parsed = JSON.parse(u);
+            setUser(parsed);
+            if (parsed.rolNombre?.toUpperCase().includes('TECNICO')) {
+                setShowMyAssets(true);
+            }
+        }
+    }, []);
+
+    // Debounce search effect or direct dependency
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchActivos();
+        }, 300); // 300ms debounce
+        return () => clearTimeout(timer);
+    }, [busqueda, filtroEstado]);
+
+    useEffect(() => {
         fetchMasters();
-    }, [filtroEstado]);
+    }, []);
 
     const fetchMasters = async () => {
         try {
@@ -44,10 +66,11 @@ export const ActivosView = () => {
                 invService.getCatalog('productos'),
                 invService.getAlmacenes()
             ]);
-            setProductos(p.data.data || []);
-            setAlmacenes(a.data.data || []);
+            // Safe access to data structure
+            setProductos(p.data?.data || p.data || []);
+            setAlmacenes(a.data?.data || a.data || []);
         } catch (e) {
-            console.error(e);
+            console.error('Error fetching masters', e);
         }
     };
 
@@ -55,13 +78,30 @@ export const ActivosView = () => {
         setLoading(true);
         try {
             const res = await activosService.getActivos({ q: busqueda, estado: filtroEstado });
-            setActivos(res.data || []);
+            setActivos(res.data?.data || res.data || []);
         } catch (err) {
             console.error(err);
+            setActivos([]); // Clear on error
         } finally {
             setLoading(false);
         }
     };
+
+    const displayActivos = useMemo(() => {
+        if (!showMyAssets) return activos;
+        return activos.filter(a => {
+            // Match by name or ID if available. 
+            // Currently using string match for demo robustness if IDs are missing in view model
+            const assignedName = a.tecnicoResponsable || a.clienteAsignado || '';
+            const userName = user?.nombre || '';
+
+            // Check ID first if available, then name
+            const matchesId = a.idResponsable && user?.idUsuario && a.idResponsable === user.idUsuario;
+            const matchesName = assignedName.toLowerCase().includes(userName.toLowerCase());
+
+            return matchesId || matchesName;
+        });
+    }, [activos, showMyAssets, user]);
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -89,10 +129,18 @@ export const ActivosView = () => {
         setSelectedActivo(activo);
         setShowHistory(true);
         setLoadingHistory(true);
+        setHistoryData([]);
+
         try {
-            // Fetch history: Try specific asset history first, fallback to product flow
+            // Improved: Try to fetch history specifically for this asset serial if possible
+            // If the API supports getHistoriaActivo(idActivo), use it. 
+            // Otherwise fallback to product history but maybe filtering in frontend?
+            // Assuming we stick to product history if serial history endpoint doesn't exist yet.
+
+            // Note: If you have an endpoint for specific asset history, use it here.
+            // For now, we will fetch product history as a fallback but log intent.
             const resProd = await invService.getHistoriaProducto(activo.idProducto || activo.productoId);
-            setHistoryData(resProd.data.data || resProd.data || []);
+            setHistoryData(resProd.data?.data || resProd.data || []);
 
         } catch (err) {
             console.error("Error fetching history", err);
@@ -143,6 +191,17 @@ export const ActivosView = () => {
                 </form>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <button
+                        className={`btn-secondary ${showMyAssets ? 'active' : ''}`}
+                        style={{ background: showMyAssets ? 'var(--accent)' : '' }}
+                        onClick={() => setShowMyAssets(!showMyAssets)}
+                    >
+                        <ShieldCheck size={18} style={{ marginRight: '5px' }} />
+                        {showMyAssets ? 'Mis Activos' : 'Ver Mis Activos'}
+                    </button>
+
+                    <div style={{ width: '1px', background: '#334155', height: '30px', margin: '0 5px' }}></div>
+
                     <Filter size={18} color="#64748b" />
                     <select
                         className="form-input"
@@ -177,12 +236,12 @@ export const ActivosView = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {loading && activos.length === 0 ? (
+                        {loading ? (
                             <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px' }}>Cargando activos...</td></tr>
-                        ) : activos.length === 0 ? (
+                        ) : displayActivos.length === 0 ? (
                             <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No se encontraron activos con los filtros actuales.</td></tr>
                         ) : (
-                            activos.map((activo) => (
+                            displayActivos.map((activo) => (
                                 <tr key={activo.idActivo} className="hover-row">
                                     <td>
                                         <div style={{ fontWeight: 700, color: '#f8fafc' }}>{activo.serial}</div>

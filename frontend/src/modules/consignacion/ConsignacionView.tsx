@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { invService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
-import { alertSuccess, alertError } from '../../services/alert.service';
+import { alertSuccess, alertError, alertConfirm } from '../../services/alert.service';
 import { DollarSign, Calendar, FileCheck, AlertCircle, RefreshCw, CheckCircle, ExternalLink } from 'lucide-react';
 import { VendorProfileView } from './VendorProfileView';
 
@@ -60,7 +60,6 @@ export const ConsignacionView = () => {
         try {
             const res = await (invService as any).getConsignedStock();
             const raw = res.data.data || res.data || [];
-            // setConsignStock(raw); removed
 
             // Group by Provider
             const grouped = raw.reduce((acc: any, curr: any) => {
@@ -96,26 +95,32 @@ export const ConsignacionView = () => {
     // Core Logic: Calculate Debt for All Providers
     const calculateAll = async () => {
         setLoading(true);
-        const results = [];
         try {
-            for (const prov of providers) {
-                // Fetch calculation for each provider
-                const res = await invService.calculateLiquidation(
-                    prov.idProveedor,
-                    new Date(startDate),
-                    new Date(endDate)
-                );
-                const items = res.data.data || res.data || [];
-                // Only add if there is debt
-                if (items.length > 0) {
-                    const total = items.reduce((acc: number, item: any) => acc + (item.cantidad * item.costoUnitario), 0);
-                    results.push({
-                        proveedor: prov,
-                        total,
-                        items // The details
-                    });
+            // Parallel execution for better performance
+            const promises = providers.map(async (prov) => {
+                try {
+                    const res = await invService.calculateLiquidation(
+                        prov.idProveedor,
+                        new Date(startDate),
+                        new Date(endDate)
+                    );
+                    const items = res.data.data || res.data || [];
+
+                    if (items.length > 0) {
+                        const total = items.reduce((acc: number, item: any) => acc + (item.cantidad * item.costoUnitario), 0);
+                        return {
+                            proveedor: prov,
+                            total,
+                            items // The details
+                        };
+                    }
+                } catch (err) {
+                    console.error(`Error calculating for provider ${prov.idProveedor}`, err);
                 }
-            }
+                return null;
+            });
+
+            const results = (await Promise.all(promises)).filter(item => item !== null);
             setCalculatedDebt(results);
         } catch (e) {
             console.error(e);
@@ -126,7 +131,12 @@ export const ConsignacionView = () => {
     };
 
     const handleProcess = async (debtItem: any) => {
-        if (!confirm(`¿Confirmar cierre de periodo para ${debtItem.proveedor.nombre} por $${debtItem.total.toFixed(2)}?`)) return;
+        const confirm = await alertConfirm(
+            `¿Confirmar cierre de periodo?`,
+            `Se procesará el cierre para ${debtItem.proveedor.nombre} por un monto de $${debtItem.total.toFixed(2)}`
+        );
+
+        if (!confirm.isConfirmed) return;
 
         setProcessing(true);
         const user = JSON.parse(localStorage.getItem('inv_user') || '{}');
@@ -157,7 +167,7 @@ export const ConsignacionView = () => {
         { key: 'proveedorNombre', label: 'Proveedor' },
         { key: 'fechaCorte', label: 'Fecha Proceso', render: (d: string) => new Date(d).toLocaleDateString() },
         { key: 'totalPagar', label: 'Monto Total', render: (v: number) => <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>${v.toFixed(2)}</span> },
-        { key: 'estado', label: 'Estado', render: (v: string) => <span className="badge badge-success">{v}</span> }
+        { key: 'estado', label: 'Estado', render: (v: string) => <span className={`badge ${v === 'PROCESADO' ? 'badge-success' : 'badge-warning'}`}>{v}</span> }
     ];
 
     // Total Pending Metric

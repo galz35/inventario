@@ -37,8 +37,13 @@ export const AuditoriaView = () => {
     };
 
     const loadAlmacenes = async () => {
-        const res = await invService.getAlmacenes();
-        setAlmacenes(res.data.data || res.data || []);
+        try {
+            const res = await invService.getAlmacenes();
+            setAlmacenes(res.data.data || res.data || []);
+        } catch (e) {
+            console.error(e);
+            alertError('Error', 'No se pudieron cargar los almacenes');
+        }
     };
 
     // --- STEP 1: CREATE SNAPSHOT ---
@@ -58,9 +63,12 @@ export const AuditoriaView = () => {
             const stockRes = await invService.getStock({ almacenId: newAuditForm.almacenId });
             const systemStock = stockRes.data.data || stockRes.data || [];
 
+            const selectedAlmacen = almacenes.find(a => a.idAlmacen.toString() === newAuditForm.almacenId);
+
             setAuditData({
                 id: res.data.idConteo,
                 ...newAuditForm,
+                almacenNombre: selectedAlmacen ? selectedAlmacen.nombre : 'Desconocido',
                 items: systemStock
             });
 
@@ -165,7 +173,7 @@ export const AuditoriaView = () => {
                                         min="0"
                                         className="form-input"
                                         value={item.countedQty}
-                                        onChange={(e) => handleUpdateCount(item.productoId, parseInt(e.target.value) || 0)}
+                                        onChange={(e) => handleUpdateCount(item.productoId, parseFloat(e.target.value) || 0)}
                                         style={{
                                             width: '100px',
                                             textAlign: 'center',

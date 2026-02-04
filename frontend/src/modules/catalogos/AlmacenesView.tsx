@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
+import { alertInfo } from '../../services/alert.service';
 
 export const AlmacenesView = () => {
     const [almacenes, setAlmacenes] = useState([]);
@@ -35,16 +36,17 @@ export const AlmacenesView = () => {
                     'TECNICO': '#f43f5e',
                     'PROYECTO': '#f59e0b'
                 };
+                const color = colors[val] || '#94a3b8'; // Fallback color
                 return (
                     <span style={{
-                        background: `${colors[val]}20`,
-                        color: colors[val],
+                        background: `${color}20`,
+                        color: color,
                         padding: '4px 12px',
                         borderRadius: '999px',
                         fontSize: '0.75rem',
                         fontWeight: 700
                     }}>
-                        {val}
+                        {val || 'OTRO'}
                     </span>
                 );
             }
@@ -69,7 +71,7 @@ export const AlmacenesView = () => {
             columns={columns}
             data={almacenes}
             loading={loading}
-            actions={<button className="btn-primary">+ Nuevo Almacén</button>}
+            actions={<button className="btn-primary" onClick={() => alertInfo('Próximamente', 'La creación de almacenes se habilitará en la siguiente fase.')}>+ Nuevo Almacén</button>}
         />
     );
 };

@@ -1,27 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { AuthView } from './modules/auth/AuthView';
-import { InventarioView } from './modules/inventario/InventarioView';
-import { OperacionesView } from './modules/operaciones/OperacionesView';
-import { PlanificacionView } from './modules/operaciones/PlanificacionView';
-import { BacklogView } from './modules/operaciones/BacklogView';
-import { CatalogosView } from './modules/catalogos/CatalogosView';
-import { AlmacenesView } from './modules/catalogos/AlmacenesView';
-import { ConsignacionView } from './modules/consignacion/ConsignacionView';
-import { AuditoriaView } from './modules/auditoria/AuditoriaView';
-import { ReportesView } from './modules/reportes/ReportesView';
-import { TransferenciasView } from './modules/inventario/TransferenciasView';
-
-import { SystemUsersView } from './modules/usuarios/SystemUsersView';
-import { WorkloadView } from './modules/usuarios/WorkloadView';
-import { DashboardView } from './modules/dashboard/DashboardView';
 import {
   LayoutDashboard, Box, Truck, Calendar, ClipboardList, PenTool,
   Settings, Building2, FolderOpen, LogOut, ChevronLeft, ChevronRight,
   UserCircle, FileText, UserCog, Users, Car, Search
 } from 'lucide-react';
-import { VehiculosView } from './modules/vehiculos/VehiculosView';
-import { ActivosView } from './modules/activos/ActivosView';
 import { CommandPalette } from './components/CommandPalette';
+
+// Lazy Load Views for Performance
+const InventarioView = lazy(() => import('./modules/inventario/InventarioView').then(m => ({ default: m.InventarioView })));
+const OperacionesView = lazy(() => import('./modules/operaciones/OperacionesView').then(m => ({ default: m.OperacionesView })));
+const PlanificacionView = lazy(() => import('./modules/operaciones/PlanificacionView').then(m => ({ default: m.PlanificacionView })));
+const BacklogView = lazy(() => import('./modules/operaciones/BacklogView').then(m => ({ default: m.BacklogView })));
+const CatalogosView = lazy(() => import('./modules/catalogos/CatalogosView').then(m => ({ default: m.CatalogosView })));
+const AlmacenesView = lazy(() => import('./modules/catalogos/AlmacenesView').then(m => ({ default: m.AlmacenesView })));
+const ConsignacionView = lazy(() => import('./modules/consignacion/ConsignacionView').then(m => ({ default: m.ConsignacionView })));
+const AuditoriaView = lazy(() => import('./modules/auditoria/AuditoriaView').then(m => ({ default: m.AuditoriaView })));
+const ReportesView = lazy(() => import('./modules/reportes/ReportesView').then(m => ({ default: m.ReportesView })));
+const TransferenciasView = lazy(() => import('./modules/inventario/TransferenciasView').then(m => ({ default: m.TransferenciasView })));
+const SystemUsersView = lazy(() => import('./modules/usuarios/SystemUsersView').then(m => ({ default: m.SystemUsersView })));
+const WorkloadView = lazy(() => import('./modules/usuarios/WorkloadView').then(m => ({ default: m.WorkloadView })));
+const DashboardView = lazy(() => import('./modules/dashboard/DashboardView').then(m => ({ default: m.DashboardView })));
+const VehiculosView = lazy(() => import('./modules/vehiculos/VehiculosView').then(m => ({ default: m.VehiculosView })));
+const ActivosView = lazy(() => import('./modules/activos/ActivosView').then(m => ({ default: m.ActivosView })));
 
 const SidebarSection = ({ label, show }: { label: string, show: boolean }) => (
   show ? <div style={{
@@ -54,6 +55,14 @@ const SidebarLink = ({ active, icon: Icon, label, onClick, showLabel }: any) => 
     </span>
     {showLabel && <span style={{ fontSize: '0.9rem' }}>{label}</span>}
   </li>
+);
+
+// Fallback Loading Component
+const PageLoader = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#94a3b8' }}>
+    <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid #334155', borderTop: '4px solid #3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+    <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+  </div>
 );
 
 export default function App() {
@@ -99,11 +108,28 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Update URL when view changes
+  // Update URL when view changes & Listen to external hash changes
   useEffect(() => {
-    window.location.hash = view;
-    // Auto-close sidebar on mobile when navigating
+    // 1. Sync URL with current View state (if different)
+    const currentHash = window.location.hash.replace('#', '');
+    if (currentHash !== view) {
+      window.location.hash = view;
+    }
+
+    // 2. Auto-close sidebar on mobile
     if (isMobile) setIsSidebarOpen(false);
+
+    // 3. Listen to browser Back/Forward buttons (Hash change)
+    const handleHashChange = () => {
+      const newHash = window.location.hash.replace('#', '');
+      // Only update view if it's different to prevent loops
+      if (newHash && newHash !== view) {
+        setView(newHash);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, [view, isMobile]);
 
   if (!user) return <AuthView onLogin={setUser} />;
@@ -119,6 +145,28 @@ export default function App() {
   const isSupervisor = roleName === 'DESPACHO' || roleName === 'SUPERVISOR';
   const isBodega = roleName === 'BODEGA';
   const isTecnico = roleName === 'TECNICO';
+
+  const renderView = () => {
+    switch (view) {
+      case 'dashboard': return <DashboardView user={user} onNavigate={setView} />;
+      case 'planificacion': return <PlanificacionView />;
+      case 'backlog': return <BacklogView />;
+      case 'inventario': return <InventarioView />;
+      case 'transferencias': return <TransferenciasView />;
+      case 'operaciones': return <OperacionesView />;
+      case 'catalogos': return <CatalogosView />;
+      case 'almacenes': return <AlmacenesView />;
+      case 'consignacion': return <ConsignacionView />;
+      case 'auditoria': return <AuditoriaView />;
+      case 'reportes': return <ReportesView />;
+      case 'activos': return <ActivosView />;
+      case 'usuarios': return <SystemUsersView />;
+      case 'sys-users': return <SystemUsersView />;
+      case 'workload': return <WorkloadView />;
+      case 'vehiculos': return <VehiculosView />;
+      default: return <DashboardView user={user} onNavigate={setView} />;
+    }
+  };
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-dark)', overflow: 'hidden' }}>
@@ -269,22 +317,9 @@ export default function App() {
         </button>
 
         <div style={{ maxWidth: '1400px', margin: '0 auto', animation: 'fadeIn 0.5s' }}>
-          {view === 'dashboard' && <DashboardView user={user} onNavigate={setView} />}
-          {view === 'planificacion' && <PlanificacionView />}
-          {view === 'backlog' && <BacklogView />}
-          {view === 'inventario' && <InventarioView />}
-          {view === 'transferencias' && <TransferenciasView />}
-          {view === 'operaciones' && <OperacionesView />}
-          {view === 'catalogos' && <CatalogosView />}
-          {view === 'almacenes' && <AlmacenesView />}
-          {view === 'consignacion' && <ConsignacionView />}
-          {view === 'auditoria' && <AuditoriaView />}
-          {view === 'reportes' && <ReportesView />}
-          {view === 'activos' && <ActivosView />}
-          {view === 'usuarios' && <SystemUsersView />}
-          {view === 'sys-users' && <SystemUsersView />}
-          {view === 'workload' && <WorkloadView />}
-          {view === 'vehiculos' && <VehiculosView />}
+          <Suspense fallback={<PageLoader />}>
+            {renderView()}
+          </Suspense>
         </div>
       </main>
 

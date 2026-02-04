@@ -2,8 +2,11 @@
  * Auth Repository - Queries de autenticación usando MSSQL directo
  * Adaptado para esquema Inv_ (Inventario)
  */
+import { Logger } from '@nestjs/common';
 import { crearRequest, NVarChar, Int } from '../db/base.repo';
 import { UsuarioDb, CredencialesDb, RolDb } from '../db/tipos';
+
+const logger = new Logger('AuthRepo');
 
 /**
  * Obtiene un usuario por correo o carnet (activo)
@@ -57,7 +60,8 @@ export async function obtenerUsuarioPorIdentificador(
       reglas: row.reglas || '[]',
       defaultMenu: null,
     };
-    // Asignar rolGlobal para compatibilidad con JWT strategy
+    // Asignar rolGlobal para compatibilidad com JWT strategy
+    // Mejorado: Si no tiene nombre pero tiene ID, inferir o usar nombre real
     usuario.rolGlobal = row.rolNombre || 'Empleado';
   } else {
     usuario.rolGlobal = 'Empleado';
@@ -77,7 +81,6 @@ export async function obtenerCredenciales(
   request.input('idUsuario', Int, idUsuario);
 
   try {
-    // Intento 1: Query completa
     const result = await request.query<CredencialesDb>(`
             SELECT idUsuario, password as passwordHash, refreshToken as refreshTokenHash, ultimoAcceso as ultimoLogin 
             FROM Inv_seg_usuarios 
@@ -85,32 +88,9 @@ export async function obtenerCredenciales(
         `);
     return result.recordset[0] || null;
   } catch (e: any) {
-    // Si falla por columna inválida, fallback y auto-reparar
-    if (e.message?.includes('Invalid column name')) {
-      console.warn(
-        'Detectada falta de columna refreshToken. Usando fallback y reparando...',
-      );
-
-      // 1. Obtener data básica
-      const result = await request.query<CredencialesDb>(`
-                SELECT idUsuario, password as passwordHash, NULL as refreshTokenHash, ultimoAcceso as ultimoLogin 
-                FROM Inv_seg_usuarios 
-                WHERE idUsuario = @idUsuario
-             `);
-
-      // 2. Intentar reparar schema async (sin await para no bloquear login)
-      crearRequest().then((req) =>
-        req
-          .query(
-            `ALTER TABLE Inv_seg_usuarios ADD refreshToken NVARCHAR(MAX) NULL`,
-          )
-          .catch(() => {}),
-      );
-
-      return result.recordset[0] || null;
-    }
-    console.error('Error crítico obteniendo credenciales', e);
-    return null;
+    logger.error(`Error obteniendo credenciales para usuario ${idUsuario}`, e);
+    // Propagate error so controller/service can handle it (e.g. 500 instead of 401 if DB fails)
+    throw e;
   }
 }
 
@@ -139,9 +119,7 @@ export async function actualizarRefreshToken(
   request.input('idUsuario', Int, idUsuario);
   request.input('refreshTokenHash', NVarChar, refreshTokenHash);
 
-  // Validamos si existe la columna antes de intentar update para evitar crash
-  // O simplemente intentamos un ALTER previo si falla?
-  // Por ahora intentaremos el UPDATE asumiendo que se corrió el fix de DB.
+  // Removed runtime ALTER TABLE logic. Schema must be correct before running.
   try {
     await request.query(`
             UPDATE Inv_seg_usuarios 
@@ -149,20 +127,8 @@ export async function actualizarRefreshToken(
             WHERE idUsuario = @idUsuario
         `);
   } catch (e: any) {
-    if (e.message?.includes('Invalid column name')) {
-      // Quick Fix: Add column if missing
-      await request.query(
-        `ALTER TABLE Inv_seg_usuarios ADD refreshToken NVARCHAR(MAX) NULL`,
-      );
-      // Retry update
-      await request.query(`
-                UPDATE Inv_seg_usuarios 
-                SET refreshToken = @refreshTokenHash 
-                WHERE idUsuario = @idUsuario
-            `);
-    } else {
-      throw e;
-    }
+    logger.error(`Error actualizando refresh token para usuario ${idUsuario}`, e);
+    throw e;
   }
 }
 

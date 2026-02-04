@@ -33,6 +33,17 @@ export const alertError = (title: string, text?: string) => {
     });
 };
 
+export const alertInfo = (title: string, text?: string) => {
+    Swal.fire({
+        icon: 'info',
+        title: title,
+        text: text,
+        background: '#0f0f0f',
+        color: '#fff',
+        confirmButtonColor: '#3b82f6'
+    });
+};
+
 export const alertConfirm = async (title: string, text: string) => {
     return await Swal.fire({
         title: title,

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as authRepo from './auth.repo';
@@ -10,47 +10,45 @@ import {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private jwtService: JwtService,
     private auditService: AuditService,
-  ) {}
+  ) { }
 
   async validateUser(identifier: string, pass: string): Promise<any> {
-    console.log('[Auth] Validando usuario:', identifier);
+    // Sanitize log: avoid logging identifier blindly if it is considered sensitive
+    this.logger.debug('Iniciando validación de credenciales');
+
     // Usar repo SQL Server
     const user = await authRepo.obtenerUsuarioPorIdentificador(identifier);
-
-    console.log(
-      '[Auth] Usuario encontrado ID:',
-      user ? user.idUsuario : 'NULL',
-    );
     if (!user) return null;
 
     const creds = await authRepo.obtenerCredenciales(user.idUsuario);
-    console.log('[Auth] Credenciales encontradas:', creds ? 'YES' : 'NULL');
 
     if (creds) {
       const match = await bcrypt.compare(pass, creds.passwordHash);
-      console.log('[Auth] Contraseña correcta:', match);
       if (match) {
         // Actualizar último login de forma asíncrona (no bloqueante)
         authRepo
           .actualizarUltimoLogin(user.idUsuario)
-          .catch((e) => console.error('Error updating last login', e));
+          .catch((e) => this.logger.warn(`Error updating last login for user ${user.idUsuario}`, e));
         return user;
       }
     }
+
     return null;
   }
 
-  async login(user: any) {
+  async login(user: any, ipAddress: string) {
     // Registrar Auditoría
     await this.auditService.log({
       idUsuario: user.idUsuario,
       accion: AccionAudit.USUARIO_LOGIN,
       recurso: RecursoAudit.USUARIO,
       recursoId: user.idUsuario.toString(),
-      detalles: { correo: user.correo, ip: 'IP_MOCK' },
+      detalles: { correo: user.correo, ip: ipAddress || 'UNKNOWN' },
     });
 
     // Generar tokens
@@ -151,7 +149,7 @@ export class AuthService {
         return JSON.parse(config.customMenu);
       }
     } catch (e) {
-      console.error('Error parsing custom menu', e);
+      this.logger.error('Error parsing custom menu', e);
     }
 
     // 2. Detección Automática: Si tiene gente a cargo, es Líder
@@ -164,7 +162,7 @@ export class AuthService {
       try {
         return JSON.parse(user.rol.defaultMenu);
       } catch (e) {
-        console.error('Error parsing role menu', e);
+        this.logger.error('Error parsing role menu', e);
       }
     }
 

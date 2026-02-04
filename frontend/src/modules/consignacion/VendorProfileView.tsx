@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { invService } from '../../services/api.service';
 import { DataTable } from '../../components/DataTable';
 import { ArrowLeft, Box, FileText } from 'lucide-react';
+import { alertError } from '../../services/alert.service';
 
 interface VendorProfileProps {
     providerId: number;
@@ -21,9 +22,16 @@ export const VendorProfileView: React.FC<VendorProfileProps> = ({ providerId, pr
         setLoading(true);
         try {
             const res = await invService.getProveedorResumen(providerId);
-            setData(res.data);
+            const result = res.data.data || res.data;
+            if (result) {
+                setData(result);
+            } else {
+                throw new Error('Datos vacíos');
+            }
         } catch (e) {
             console.error(e);
+            alertError('Error', 'No se pudieron cargar los datos del proveedor.');
+            setData({ stock: [], historial: [] });
         } finally {
             setLoading(false);
         }
@@ -79,7 +87,7 @@ export const VendorProfileView: React.FC<VendorProfileProps> = ({ providerId, pr
                             { key: 'idLiquidacion', label: 'Ref', render: (v: any) => <small>LIQ-{v}</small> },
                             { key: 'fechaCorte', label: 'Fecha', render: (v: string) => new Date(v).toLocaleDateString() },
                             { key: 'totalPagar', label: 'Monto', render: (v: number) => <span className="text-success">${Number(v).toFixed(2)}</span> },
-                            { key: 'estado', label: 'Estado', render: (v: string) => <span className="badge">{v}</span> }
+                            { key: 'estado', label: 'Estado', render: (v: string) => <span className={`badge ${v === 'PROCESADO' ? 'badge-success' : 'badge-warning'}`}>{v}</span> }
                         ]}
                         title=""
                     />

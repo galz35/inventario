@@ -1,12 +1,18 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Logger } from '@nestjs/common';
 import { AppService } from './app.service';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as bcrypt from 'bcrypt';
+import { ejecutarQuery } from './db/base.repo';
 
 // NOTA: Endpoints de seed/test deshabilitados temporalmente durante migración MSSQL
 // Usaban sintaxis PostgreSQL ($1, $2...) incompatible con SQL Server
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  private readonly logger = new Logger(AppController.name);
+
+  constructor(private readonly appService: AppService) { }
 
   @Get()
   getHello(): string {
@@ -15,10 +21,11 @@ export class AppController {
 
   @Get('reset-passwords')
   async resetPasswords() {
+    // Security: Do not expose raw SQL or sensitive info
     return {
       message:
         'Endpoint deshabilitado durante migración. Usar SSMS para reset manual.',
-      sql: "UPDATE Inv_seg_usuariosCredenciales SET passwordHash = '<bcrypt_hash>' WHERE 1=1",
+      hint: "Contactar administrador de DB para reseteo."
     };
   }
 
@@ -50,14 +57,26 @@ export class AppController {
 
   @Get('setup-db')
   async setupDatabase() {
-    const fs = require('fs');
-    const path = require('path');
-    const { ejecutarQuery } = require('./db/base.repo');
+    // Security: Disable in production to prevent accidental resets
+    if (process.env.NODE_ENV === 'production') {
+      this.logger.warn('Attempt to access setup-db in production environment.');
+      return { error: 'Endpoint unavailable in production environment.' };
+    }
 
     try {
-      const sqlPath = 'd:\\inventario\\docs\\diseno_db_fase1.sql'; // Ruta absoluta confirmada
-      if (!fs.existsSync(sqlPath))
-        return { error: 'SQL File Not Found', path: sqlPath };
+      // Improved: Use relative path based on CWD or app root
+      // Tries to locate the file in probable locations
+      let sqlPath = path.resolve(process.cwd(), 'docs', 'diseno_db_fase1.sql');
+
+      if (!fs.existsSync(sqlPath)) {
+        // Fallback for different execution contexts
+        sqlPath = path.resolve(process.cwd(), '..', 'docs', 'diseno_db_fase1.sql');
+      }
+
+      if (!fs.existsSync(sqlPath)) {
+        this.logger.error(`SQL File Not Found at ${sqlPath}`);
+        return { error: 'SQL File Not Found. Please run in dev environment or verify docs path.' };
+      }
 
       const content = fs.readFileSync(sqlPath, 'utf8');
       const batches = content.split(/^GO/gm);
@@ -71,46 +90,32 @@ export class AppController {
           try {
             await ejecutarQuery(q);
             success++;
-          } catch (e) {
-            // Ignorar errores de existencia
-            if (!JSON.stringify(e).includes('already exists')) errors++;
+          } catch (e: any) {
+            // Ignorar errores de existencia (idempotencia)
+            if (!JSON.stringify(e).includes('already exists') && !e.message?.includes('already exists')) {
+              this.logger.warn(`SetupDB Batch Error: ${e.message}`);
+              errors++;
+            }
           }
         }
       }
 
       // REPARACIÓN DE ESQUEMA (Fix Schema)
       // Asegurar columnas críticas para Auth
-      try {
-        await ejecutarQuery(
-          'ALTER TABLE Inv_seg_usuarios ADD password NVARCHAR(255) NULL',
-        );
-      } catch (e) {}
-      try {
-        await ejecutarQuery(
-          'ALTER TABLE Inv_seg_usuarios ADD refreshToken NVARCHAR(MAX) NULL',
-        );
-      } catch (e) {}
-      try {
-        await ejecutarQuery(
-          'ALTER TABLE Inv_seg_usuarios ADD ultimoAcceso DATETIME NULL',
-        );
-      } catch (e) {}
+      const fixSchema = async (query: string) => {
+        try {
+          await ejecutarQuery(query);
+        } catch (e: any) {
+          this.logger.debug(`Schema fix skipped/failed: ${e.message}`);
+        }
+      };
 
-      try {
-        await ejecutarQuery(
-          'ALTER TABLE Inv_seg_roles ADD esSistema BIT DEFAULT 0',
-        );
-      } catch (e) {}
-      try {
-        await ejecutarQuery(
-          'ALTER TABLE Inv_seg_roles ADD reglas NVARCHAR(MAX) NULL',
-        );
-      } catch (e) {}
-      try {
-        await ejecutarQuery(
-          'ALTER TABLE Inv_seg_roles ADD defaultMenu NVARCHAR(MAX) NULL',
-        );
-      } catch (e) {}
+      await fixSchema('ALTER TABLE Inv_seg_usuarios ADD password NVARCHAR(255) NULL');
+      await fixSchema('ALTER TABLE Inv_seg_usuarios ADD refreshToken NVARCHAR(MAX) NULL');
+      await fixSchema('ALTER TABLE Inv_seg_usuarios ADD ultimoAcceso DATETIME NULL');
+      await fixSchema('ALTER TABLE Inv_seg_roles ADD esSistema BIT DEFAULT 0');
+      await fixSchema('ALTER TABLE Inv_seg_roles ADD reglas NVARCHAR(MAX) NULL');
+      await fixSchema('ALTER TABLE Inv_seg_roles ADD defaultMenu NVARCHAR(MAX) NULL');
 
       // Seed User
       // Crear rol admin si no existe
@@ -120,13 +125,6 @@ export class AppController {
           `);
 
       // Crear usuario Diana
-      // Hash dummy para bypass (si backend valida bcrypt debe coincidir lógica)
-      // Asumiremos que generamos uno válido o desactivamos check si es dev
-      // O usamos el que el backend genere.
-
-      // Para que el login funcione REALMENTE, el hash debe ser válido para bcrypt.
-      // Generaremos uno usando el modulo bcrypt del proyecto.
-      const bcrypt = require('bcrypt');
       const hash = await bcrypt.hash('123456', 10);
 
       await ejecutarQuery(`
@@ -197,7 +195,8 @@ export class AppController {
         message: 'DB setup complete & Admin user ready',
       };
     } catch (e: any) {
-      return { error: e.message, stack: e.stack };
+      this.logger.error('DB Setup failed', e);
+      return { error: e.message, stack: process.env.NODE_ENV === 'development' ? e.stack : undefined };
     }
   }
 }
