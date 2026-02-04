@@ -142,3 +142,38 @@ export async function crearActivo(datos: {
     idUsuarioRegistra: { valor: datos.idUsuarioRegistra, tipo: Int }
   });
 }
+
+export async function obtenerHistorialActivo(idActivo: number) {
+  return await ejecutarQuery(`
+        SELECT 
+            h.idHistorial,
+            h.tipoMovimiento,
+            h.idUbicacionNueva,
+            h.idResponsableNuevo,
+            h.fechaMovimiento,
+            h.notas,
+            alm.nombre as ubicacionNombre,
+            u.nombre as responsableNombre
+        FROM Inv_act_historial h
+        LEFT JOIN Inv_cat_almacenes alm ON h.idUbicacionNueva = alm.idAlmacen
+        LEFT JOIN Inv_seg_usuarios u ON h.idResponsableNuevo = u.idUsuario
+        WHERE h.idActivo = @idActivo
+        ORDER BY h.fechaMovimiento DESC
+    `, {
+    idActivo: { valor: idActivo, tipo: Int }
+  });
+}
+
+export async function eliminarActivo(idActivo: number, idUsuarioRegistra: number) {
+  return await ejecutarQuery(`
+        UPDATE Inv_act_activos
+        SET estado = 'BAJA'
+        WHERE idActivo = @idActivo;
+
+        INSERT INTO Inv_act_historial (idActivo, tipoMovimiento, fechaMovimiento, idUsuarioRegistra, notas)
+        VALUES (@idActivo, 'BAJA', GETDATE(), @idUsuarioRegistra, 'Baja lógica');
+    `, {
+    idActivo: { valor: idActivo, tipo: Int },
+    idUsuarioRegistra: { valor: idUsuarioRegistra, tipo: Int }
+  });
+}
