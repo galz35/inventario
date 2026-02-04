@@ -3,6 +3,7 @@ import { AuthView } from './modules/auth/AuthView';
 import { InventarioView } from './modules/inventario/InventarioView';
 import { OperacionesView } from './modules/operaciones/OperacionesView';
 import { PlanificacionView } from './modules/operaciones/PlanificacionView';
+import { BacklogView } from './modules/operaciones/BacklogView';
 import { CatalogosView } from './modules/catalogos/CatalogosView';
 import { AlmacenesView } from './modules/catalogos/AlmacenesView';
 import { ConsignacionView } from './modules/consignacion/ConsignacionView';
@@ -166,6 +167,7 @@ export default function App() {
             <>
               <SidebarSection label="Operaciones" show={isSidebarOpen || !isMobile} />
               {(isAdmin || isSupervisor) && <SidebarLink active={view === 'planificacion'} icon={Calendar} label="Planificación" onClick={() => setView('planificacion')} showLabel={isSidebarOpen || !isMobile} />}
+              {(isAdmin || isSupervisor) && <SidebarLink active={view === 'backlog'} icon={ClipboardList} label="Backlog OTs" onClick={() => setView('backlog')} showLabel={isSidebarOpen || !isMobile} />}
               <SidebarLink active={view === 'operaciones'} icon={ClipboardList} label={isTecnico ? "Mis Órdenes" : "Órdenes OT"} onClick={() => setView('operaciones')} showLabel={isSidebarOpen || !isMobile} />
               {(isAdmin || isSupervisor) && <SidebarLink active={view === 'reportes'} icon={FileText} label="Reportes y KPIs" onClick={() => setView('reportes')} showLabel={isSidebarOpen || !isMobile} />}
               {isTecnico && <SidebarLink active={view === 'activos'} icon={PenTool} label="Mis Herramientas" onClick={() => setView('activos')} showLabel={isSidebarOpen || !isMobile} />}
@@ -269,6 +271,7 @@ export default function App() {
         <div style={{ maxWidth: '1400px', margin: '0 auto', animation: 'fadeIn 0.5s' }}>
           {view === 'dashboard' && <DashboardView user={user} onNavigate={setView} />}
           {view === 'planificacion' && <PlanificacionView />}
+          {view === 'backlog' && <BacklogView />}
           {view === 'inventario' && <InventarioView />}
           {view === 'transferencias' && <TransferenciasView />}
           {view === 'operaciones' && <OperacionesView />}

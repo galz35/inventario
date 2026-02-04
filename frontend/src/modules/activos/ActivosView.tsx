@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { activosService, invService } from '../../services/api.service';
-import { Search, User, Box, History, Filter } from 'lucide-react';
+import { Search, User, Box, History, Filter, Plus } from 'lucide-react';
 import { SidePanel } from '../../components/SidePanel';
 import { KardexTimeline } from '../inventario/components/KardexTimeline';
+import { Modal } from '../../components/Modal';
+import { alertSuccess, alertError } from '../../services/alert.service';
 
 export const ActivosView = () => {
     // View Mode: 'list' or 'track' (legacy tracker) - We'll stick to list as default per request
@@ -19,9 +21,35 @@ export const ActivosView = () => {
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [historyData, setHistoryData] = useState<any[]>([]);
 
+    // Creation State
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [newItem, setNewItem] = useState({
+        serial: '',
+        idProducto: '',
+        modelo: '',
+        estado: 'DISPONIBLE',
+        idAlmacenActual: ''
+    });
+    const [productos, setProductos] = useState<any[]>([]);
+    const [almacenes, setAlmacenes] = useState<any[]>([]);
+
     useEffect(() => {
         fetchActivos();
-    }, [filtroEstado]); // Refetch when filter changes. Text search usually needs debounce or manual submit.
+        fetchMasters();
+    }, [filtroEstado]);
+
+    const fetchMasters = async () => {
+        try {
+            const [p, a] = await Promise.all([
+                invService.getCatalog('productos'),
+                invService.getAlmacenes()
+            ]);
+            setProductos(p.data.data || []);
+            setAlmacenes(a.data.data || []);
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
     const fetchActivos = async () => {
         setLoading(true);
@@ -40,28 +68,29 @@ export const ActivosView = () => {
         fetchActivos();
     };
 
+    const handleCreate = async () => {
+        if (!newItem.serial || !newItem.idProducto) return alertError('Serial y Producto requeridos');
+        try {
+            await activosService.crearActivo({
+                ...newItem,
+                idProducto: parseInt(newItem.idProducto),
+                idAlmacenActual: newItem.idAlmacenActual ? parseInt(newItem.idAlmacenActual) : 1
+            });
+            alertSuccess('Activo creado correctamente');
+            setShowCreateModal(false);
+            setNewItem({ serial: '', idProducto: '', modelo: '', estado: 'DISPONIBLE', idAlmacenActual: '' });
+            fetchActivos();
+        } catch (err: any) {
+            alertError('Error al crear', err.response?.data?.message || err.message);
+        }
+    };
+
     const handleViewHistory = async (activo: any) => {
         setSelectedActivo(activo);
         setShowHistory(true);
         setLoadingHistory(true);
         try {
             // Fetch history: Try specific asset history first, fallback to product flow
-            // Note: invService.getHistoriaProducto is product-level. 
-            // We should use tracking by serial if available, but for now we reuse existing logic or improve.
-            // Let's stick to Product history for visual consistency unless we added a specific endpoint.
-            // ACTUALLY: We just added getActivos, but did we add getHistorialActivo endpoint? 
-            // api.service has getHistorialActivo -> call /inv/activos/:id/historial
-            // Let's try that first!
-
-            // Wait, api.service has: async getHistorialActivo(id: number) { return api.get(`/inv/activos/${id}/historial`); }
-            // Does the backend have it? Let's check. 
-            // If not, we fallback to product history as before.
-
-            // Assuming we lack the specific endpoint backend impl (I didn't add it), 
-            // I will use product history as placeholder OR just show the asset details.
-
-            // Let's fix this: previously it passed activo.idProducto.
-            // Let's fix this: previously it passed activo.idProducto.
             const resProd = await invService.getHistoriaProducto(activo.idProducto || activo.productoId);
             setHistoryData(resProd.data.data || resProd.data || []);
 
@@ -92,7 +121,9 @@ export const ActivosView = () => {
                     <p style={{ color: '#64748b', fontSize: '1rem', margin: 0 }}>Gestión y trazabilidad de equipos por serie</p>
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                    {/* Actions like "Nuevo Activo" could go here */}
+                    <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
+                        <Plus size={18} style={{ marginRight: '8px' }} /> Nuevo Activo
+                    </button>
                 </div>
             </div>
 
@@ -127,7 +158,7 @@ export const ActivosView = () => {
                     </select>
                 </div>
 
-                <button className="btn-primary" onClick={fetchActivos} disabled={loading}>
+                <button className="btn-secondary" onClick={fetchActivos} disabled={loading}>
                     {loading ? '...' : 'Actualizar'}
                 </button>
             </div>
@@ -236,6 +267,34 @@ export const ActivosView = () => {
                     </div>
                 )}
             </SidePanel>
+
+            <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Alta de Nuevo Activo">
+                <div className="form-group">
+                    <label>Número de Serie (SN)</label>
+                    <input className="form-input" value={newItem.serial} onChange={e => setNewItem({ ...newItem, serial: e.target.value })} placeholder="Ej: SN-29384823" />
+                </div>
+                <div className="form-group">
+                    <label>Producto Base</label>
+                    <select className="form-input" value={newItem.idProducto} onChange={e => setNewItem({ ...newItem, idProducto: e.target.value })}>
+                        <option value="">-- Seleccionar --</option>
+                        {productos.map(p => <option key={p.idProducto} value={p.idProducto}>{p.codigo} - {p.nombre}</option>)}
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label>Modelo / Versión</label>
+                    <input className="form-input" value={newItem.modelo} onChange={e => setNewItem({ ...newItem, modelo: e.target.value })} placeholder="Opcional" />
+                </div>
+                <div className="form-group">
+                    <label>Almacén Inicial</label>
+                    <select className="form-input" value={newItem.idAlmacenActual} onChange={e => setNewItem({ ...newItem, idAlmacenActual: e.target.value })}>
+                        <option value="">-- Bodega Central (Default) --</option>
+                        {almacenes.map(a => <option key={a.idAlmacen} value={a.idAlmacen}>{a.nombre}</option>)}
+                    </select>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                    <button className="btn-primary" onClick={handleCreate}>Registrar Alta</button>
+                </div>
+            </Modal>
         </div>
     );
 };

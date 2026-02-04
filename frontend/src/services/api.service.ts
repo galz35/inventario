@@ -168,6 +168,22 @@ class InventoryService {
         return api.get('/inv/auditoria/conteos');
     }
 
+    async iniciarAuditoria(data: any) {
+        return api.post('/inv/auditoria/iniciar', data);
+    }
+
+    async conciliarAuditoria(data: any) {
+        return api.post('/inv/auditoria/conciliar', data);
+    }
+
+    async getCierresMensuales() {
+        return api.get('/inv/auditoria/cierres');
+    }
+
+    async generarCierreMensual(data: any) {
+        return api.post('/inv/auditoria/cierre-mensual', data);
+    }
+
     async registrarMovimiento(data: any) {
         return api.post('/inv/inventario/movimiento', data);
     }
@@ -313,6 +329,10 @@ class ActivosService {
 
     async getActivos(params?: { q?: string, estado?: string }) {
         return api.get('/inv/activos', { params });
+    }
+
+    async crearActivo(data: any) {
+        return api.post('/inv/activos', data);
     }
 }
 

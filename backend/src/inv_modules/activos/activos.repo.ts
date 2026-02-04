@@ -80,3 +80,65 @@ export async function listarActivos(filtros: {
 
   return await ejecutarQuery(query, params);
 }
+
+export async function asignarActivo(datos: {
+  idActivo: number;
+  idTecnico?: number;
+  idAlmacen?: number;
+  idUsuarioAsigna: number;
+  notas?: string;
+}) {
+  return await ejecutarQuery(`
+      UPDATE Inv_act_activos
+      SET 
+          idTecnicoActual = @idTecnico,
+          idAlmacenActual = @idAlmacen,
+          idClienteActual = NULL, -- Reset cliente al reasignar
+          fechaUltimoMovimiento = GETDATE()
+      WHERE idActivo = @idActivo;
+
+      -- Registrar Histórico
+      INSERT INTO Inv_act_historial (idActivo, tipoMovimiento, idUbicacionNueva, idResponsableNuevo, fechaMovimiento, idUsuarioRegistra, notas)
+      VALUES (@idActivo, 'ASIGNACION', @idAlmacen, @idTecnico, GETDATE(), @idUsuarioAsigna, @notas);
+  `, {
+    idActivo: { valor: datos.idActivo, tipo: Int },
+    idTecnico: { valor: datos.idTecnico || null, tipo: Int },
+    idAlmacen: { valor: datos.idAlmacen || null, tipo: Int },
+    idUsuarioAsigna: { valor: datos.idUsuarioAsigna, tipo: Int },
+    notas: { valor: datos.notas || 'Reasignación', tipo: NVarChar }
+  });
+}
+
+export async function crearActivo(datos: {
+  serial: string;
+  idProducto: number;
+  estado: string;
+  idAlmacenActual?: number;
+  modelo?: string;
+  idUsuarioRegistra: number;
+}) {
+  // Verificar duplicado
+  const existe = await ejecutarQuery('SELECT 1 FROM Inv_act_activos WHERE serial = @serial', {
+    serial: { valor: datos.serial, tipo: NVarChar }
+  });
+  if (existe.length > 0) throw new Error(`El serial ${datos.serial} ya existe.`);
+
+  return await ejecutarQuery(`
+        INSERT INTO Inv_act_activos (serial, idProducto, estado, idAlmacenActual, modelo, fechaIngreso)
+        VALUES (@serial, @idProducto, @estado, @idAlmacenActual, @modelo, GETDATE());
+
+        DECLARE @idActivo INT = SCOPE_IDENTITY();
+
+        INSERT INTO Inv_act_historial (idActivo, tipoMovimiento, idUbicacionNueva, fechaMovimiento, idUsuarioRegistra, notas)
+        VALUES (@idActivo, 'ALTA', @idAlmacenActual, GETDATE(), @idUsuarioRegistra, 'Alta Inicial');
+
+        SELECT @idActivo as id;
+    `, {
+    serial: { valor: datos.serial, tipo: NVarChar },
+    idProducto: { valor: datos.idProducto, tipo: Int },
+    estado: { valor: datos.estado, tipo: NVarChar },
+    idAlmacenActual: { valor: datos.idAlmacenActual || 1, tipo: Int }, // Default Bodega Central
+    modelo: { valor: datos.modelo || '', tipo: NVarChar },
+    idUsuarioRegistra: { valor: datos.idUsuarioRegistra, tipo: Int }
+  });
+}

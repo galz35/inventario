@@ -79,12 +79,12 @@ export const TransferenciasView = () => {
     const handleOpenCreate = () => {
         if (isTecnico && user.idAlmacenTecnico) {
             setTransferData({
-                almacenOrigenId: '1', // Bodega Central
-                almacenDestinoId: user.idAlmacenTecnico.toString(),
+                almacenOrigenId: user.idAlmacen?.toString() || '',
+                almacenDestinoId: user.idAlmacenTecnico?.toString() || '',
                 notas: 'Solicitud de reposición para cuadrilla',
                 detalles: []
             });
-            fetchStockOrigen('1');
+            if (user.idAlmacen) fetchStockOrigen(user.idAlmacen.toString());
         } else {
             setTransferData({ almacenOrigenId: '', almacenDestinoId: '', notas: '', detalles: [] });
         }

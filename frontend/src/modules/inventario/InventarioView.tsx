@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 import { useState, useEffect } from 'react';
 import { invService } from '../../services/api.service';
 import { alertSuccess, alertError } from '../../services/alert.service';
@@ -75,18 +76,13 @@ export const InventarioView = () => {
 
             const alms = resAlm.data.data || resAlm.data || [];
 
-            // DEMO FILTER: Keep only key warehouses to avoid confusion
-            // 1: Bodega Central, 2: Regional Norte, 203: Cargo Miguel(Admin), 207: Movil Carlos(Tech)
-            const demoIds = [1, 2, 203, 207];
-            const filteredAlms = alms.filter((a: any) => demoIds.includes(a.idAlmacen));
-
-            setAlmacenes(filteredAlms);
+            setAlmacenes(alms);
             setProductos(resProd.data.data || resProd.data || []);
             setProveedores(resProv.data.data || resProv.data || []);
 
-            if (filteredAlms.length > 0) {
-                setTargetAlmacen(filteredAlms[0].idAlmacen);
-                setEntryForm(prev => ({ ...prev, almacenId: filteredAlms[0].idAlmacen }));
+            if (alms.length > 0) {
+                setTargetAlmacen(alms[0].idAlmacen);
+                setEntryForm(prev => ({ ...prev, almacenId: alms[0].idAlmacen }));
             }
         } catch (error) {
             console.warn("Error cargando maestros");
@@ -111,8 +107,40 @@ export const InventarioView = () => {
         fetchMasters();
     }, []);
 
-    const handleRegisterEntry = async () => {
-        if (!entryForm.productoId || entryForm.cantidad <= 0) return alertError('Datos incompletos');
+    // Master-Detail State
+    const [entryItems, setEntryItems] = useState<{
+        productoId: string;
+        productoNombre: string;
+        cantidad: number;
+        costoUnitario: number;
+    }[]>([]);
+
+    const handleAddItemToList = () => {
+        if (!entryForm.productoId || entryForm.cantidad <= 0) {
+            return alertError('Seleccione producto y cantidad válida');
+        }
+
+        const producto = productos.find(p => p.idProducto.toString() === entryForm.productoId);
+        if (!producto) return;
+
+        setEntryItems(prev => [...prev, {
+            productoId: entryForm.productoId,
+            productoNombre: `${producto.codigo} - ${producto.nombre}`,
+            cantidad: entryForm.cantidad,
+            costoUnitario: entryForm.costoUnitario
+        }]);
+
+        // Clean fields for next item
+        setEntryForm(prev => ({ ...prev, cantidad: 1, costoUnitario: 0, productoId: '' }));
+        setProductSearchTerm('');
+    };
+
+    const handleRemoveItem = (index: number) => {
+        setEntryItems(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleSaveAllItems = async () => {
+        if (entryItems.length === 0) return alertError('Agregue al menos un producto');
         if (entryType === 'PROVEEDOR' && !entryForm.proveedorId) return alertError('Seleccione proveedor');
 
         setProcessing(true);
@@ -120,21 +148,21 @@ export const InventarioView = () => {
             await invService.registrarMovimiento({
                 tipoMovimiento: 'ENTRADA',
                 almacenDestinoId: parseInt(entryForm.almacenId),
-                notas: entryForm.notas || 'Ingreso manual',
-                detalles: [{
-                    productoId: parseInt(entryForm.productoId),
-                    cantidad: Number(entryForm.cantidad),
+                notas: entryForm.notas || 'Ingreso múltiple',
+                detalles: entryItems.map(item => ({
+                    productoId: parseInt(item.productoId),
+                    cantidad: item.cantidad,
                     propietarioTipo: entryType,
                     proveedorId: entryType === 'PROVEEDOR' ? parseInt(entryForm.proveedorId) : 0,
-                    costoUnitario: Number(entryForm.costoUnitario)
-                }]
+                    costoUnitario: item.costoUnitario
+                }))
             });
-            alertSuccess('Entrada registrada correctamente');
+            alertSuccess(`${entryItems.length} productos ingresados correctamente`);
             setShowEntryModal(false);
+            setEntryItems([]);
             fetchStock(selectedAlmacen);
-            // Reset basic fields
-            setEntryForm(prev => ({ ...prev, cantidad: 1, notas: '', productoId: '' }));
-            setProductSearchTerm('');
+            // Reset form completely
+            setEntryForm(prev => ({ ...prev, cantidad: 1, notas: '', productoId: '', costoUnitario: 0 }));
         } catch (err) {
             alertError('Error al registrar entrada');
         } finally {
@@ -183,9 +211,51 @@ export const InventarioView = () => {
         }
     ];
 
+    // Excel Preview State
+    const [previewData, setPreviewData] = useState<any[]>([]);
+    const [showPreview, setShowPreview] = useState(false);
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            setImportFile(e.target.files[0]);
+            const file = e.target.files[0];
+            setImportFile(file);
+
+            // Parsear Excel para preview
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const data = evt.target?.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+                // Validar cada fila
+                const validated = jsonData.map((row: any, idx: number) => {
+                    const errors: string[] = [];
+                    const codigo = row.Codigo || row.codigo || row.CODIGO || '';
+                    const cantidad = parseFloat(row.Cantidad || row.cantidad || row.CANTIDAD || 0);
+
+                    if (!codigo) errors.push('Código vacío');
+                    if (isNaN(cantidad) || cantidad <= 0) errors.push('Cantidad inválida');
+
+                    // Verificar si producto existe
+                    const producto = productos.find(p => p.codigo === codigo);
+                    if (!producto && codigo) errors.push('Producto no encontrado');
+
+                    return {
+                        fila: idx + 2, // +2 por header y base-1
+                        codigo,
+                        cantidad,
+                        productoNombre: producto?.nombre || '???',
+                        errors,
+                        incluir: errors.length === 0
+                    };
+                });
+
+                setPreviewData(validated);
+                setShowPreview(true);
+            };
+            reader.readAsBinaryString(file);
         }
     };
 
@@ -541,14 +611,59 @@ export const InventarioView = () => {
                     </div>
                 )}
 
-                <div className="form-group">
+                {/* Lista de Items Agregados */}
+                {entryItems.length > 0 && (
+                    <div style={{ marginTop: '20px', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                        <div style={{ background: '#1a1a1a', padding: '10px 15px', fontWeight: 600, fontSize: '0.85rem' }}>
+                            📦 Productos a Ingresar ({entryItems.length})
+                        </div>
+                        <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                            {entryItems.map((item, idx) => (
+                                <div key={idx} style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '10px 15px',
+                                    borderBottom: '1px solid rgba(255,255,255,0.05)'
+                                }}>
+                                    <div>
+                                        <div style={{ fontWeight: 600 }}>{item.productoNombre}</div>
+                                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                                            Cant: {item.cantidad} | ${item.costoUnitario.toFixed(2)} c/u
+                                        </div>
+                                    </div>
+                                    <button
+                                        className="btn-danger"
+                                        style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                                        onClick={() => handleRemoveItem(idx)}
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <div style={{ background: '#1a1a1a', padding: '10px 15px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Total Items: <b>{entryItems.length}</b></span>
+                            <span>Valor Total: <b style={{ color: 'var(--primary)' }}>
+                                ${entryItems.reduce((sum, i) => sum + (i.cantidad * i.costoUnitario), 0).toFixed(2)}
+                            </b></span>
+                        </div>
+                    </div>
+                )}
+
+                <div className="form-group" style={{ marginTop: '15px' }}>
                     <label className="form-label">Notas / Referencia</label>
                     <textarea className="form-input" rows={2} placeholder="N° Factura, Orden de Compra..." value={entryForm.notas} onChange={e => setEntryForm({ ...entryForm, notas: e.target.value })} />
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
-                    <button className="btn-secondary" onClick={() => setShowEntryModal(false)} disabled={processing}>Cancelar</button>
-                    <button className="btn-primary" onClick={handleRegisterEntry} disabled={processing}>{processing ? 'Registrando...' : 'Registrar'}</button>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '15px' }}>
+                    <button className="btn-secondary" onClick={() => handleAddItemToList()} disabled={processing}>
+                        + Agregar a Lista
+                    </button>
+                    <button className="btn-secondary" onClick={() => { setShowEntryModal(false); setEntryItems([]); }} disabled={processing}>
+                        Cancelar
+                    </button>
+                    <button className="btn-primary" onClick={handleSaveAllItems} disabled={processing || entryItems.length === 0}>{processing ? 'Guardando...' : `Guardar ${entryItems.length} Items`}</button>
                 </div>
             </Modal>
 
@@ -594,6 +709,116 @@ export const InventarioView = () => {
                             <input type="file" accept=".xlsx, .xls" onChange={handleFileChange} style={{ color: '#fff' }} />
                         </div>
                     </div>
+                </div>
+            </Modal>
+
+            {/* Modal Preview Excel */}
+            <Modal
+                isOpen={showPreview}
+                onClose={() => setShowPreview(false)}
+                title="Vista Previa de Importación"
+                width="800px"
+            >
+                <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Total filas: <b>{previewData.length}</b></span>
+                    <span style={{ color: '#10b981' }}>
+                        Válidas: <b>{previewData.filter(r => r.errors.length === 0).length}</b>
+                    </span>
+                    <span style={{ color: '#ef4444' }}>
+                        Con errores: <b>{previewData.filter(r => r.errors.length > 0).length}</b>
+                    </span>
+                </div>
+
+                <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                            <tr style={{ background: '#1a1a1a', position: 'sticky', top: 0 }}>
+                                <th style={{ padding: '10px', textAlign: 'left' }}>Incluir</th>
+                                <th style={{ padding: '10px', textAlign: 'left' }}>Fila</th>
+                                <th style={{ padding: '10px', textAlign: 'left' }}>Código</th>
+                                <th style={{ padding: '10px', textAlign: 'left' }}>Producto</th>
+                                <th style={{ padding: '10px', textAlign: 'right' }}>Cantidad</th>
+                                <th style={{ padding: '10px', textAlign: 'left' }}>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {previewData.map((row, idx) => (
+                                <tr key={idx} style={{
+                                    background: row.errors.length > 0 ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
+                                    borderBottom: '1px solid rgba(255,255,255,0.05)'
+                                }}>
+                                    <td style={{ padding: '8px 10px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={row.incluir}
+                                            onChange={() => {
+                                                const updated = [...previewData];
+                                                updated[idx].incluir = !updated[idx].incluir;
+                                                setPreviewData(updated);
+                                            }}
+                                            disabled={row.errors.length > 0}
+                                        />
+                                    </td>
+                                    <td style={{ padding: '8px 10px' }}>{row.fila}</td>
+                                    <td style={{ padding: '8px 10px' }}><code>{row.codigo}</code></td>
+                                    <td style={{ padding: '8px 10px' }}>{row.productoNombre}</td>
+                                    <td style={{ padding: '8px 10px', textAlign: 'right' }}>{row.cantidad}</td>
+                                    <td style={{ padding: '8px 10px' }}>
+                                        {row.errors.length === 0 ? (
+                                            <span style={{ color: '#10b981' }}>✓ OK</span>
+                                        ) : (
+                                            <span style={{ color: '#ef4444', fontSize: '0.75rem' }}>
+                                                {row.errors.join(', ')}
+                                            </span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+                    <button className="btn-secondary" onClick={() => setShowPreview(false)}>Cancelar</button>
+                    <button
+                        className="btn-primary"
+                        onClick={async () => {
+                            const itemsToImport = previewData.filter(r => r.incluir && r.errors.length === 0);
+                            if (itemsToImport.length === 0) return alertError('No hay items válidos');
+
+                            setUploading(true);
+                            try {
+                                // Enviar solo items válidos
+                                await invService.registrarMovimiento({
+                                    tipoMovimiento: 'ENTRADA_CARGA_MASIVA',
+                                    almacenDestinoId: parseInt(targetAlmacen),
+                                    notas: 'Importación Excel con validación',
+                                    detalles: itemsToImport.map(item => {
+                                        const prod = productos.find(p => p.codigo === item.codigo);
+                                        return {
+                                            productoId: prod?.idProducto,
+                                            cantidad: item.cantidad,
+                                            propietarioTipo: 'EMPRESA',
+                                            proveedorId: 0,
+                                            costoUnitario: 0
+                                        };
+                                    })
+                                });
+                                alertSuccess(`${itemsToImport.length} productos importados`);
+                                setShowPreview(false);
+                                setShowImportModal(false);
+                                setPreviewData([]);
+                                fetchStock();
+                            } catch (err) {
+                                alertError('Error en importación');
+                            } finally {
+                                setUploading(false);
+                            }
+                        }}
+                        disabled={uploading || previewData.filter(r => r.incluir).length === 0}
+                    >
+                        {uploading ? 'Importando...' : `Importar ${previewData.filter(r => r.incluir).length} Items`}
+                    </button>
                 </div>
             </Modal>
         </div>

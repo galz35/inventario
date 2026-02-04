@@ -27,11 +27,10 @@ export const AuditoriaView = () => {
     const fetchConteos = async () => {
         setLoading(true);
         try {
-            const res = await invService.getConteos(); // Mocked or Real
+            const res = await invService.getConteos();
             setConteos(res.data.data || res.data || []);
         } catch (err) {
             console.error(err);
-            // setConteos([]); // Fallback
         } finally {
             setLoading(false);
         }
@@ -46,30 +45,38 @@ export const AuditoriaView = () => {
     const handleStartAudit = async () => {
         if (!newAuditForm.almacenId || !newAuditForm.nombre) return alertError('Complete los campos');
 
-        // In a real backend, this would "Freeze" stock
-        const mockAudit = {
-            id: Math.floor(Math.random() * 1000),
-            ...newAuditForm,
-            fechaInicio: new Date().toISOString(),
-            items: [] // In real backend, this comes populated with system stock (hidden)
-        };
+        try {
+            const user = JSON.parse(localStorage.getItem('inv_user') || '{}');
+            const res = await invService.iniciarAuditoria({
+                almacenId: parseInt(newAuditForm.almacenId),
+                nombre: newAuditForm.nombre,
+                idUsuario: user.idUsuario
+            });
 
-        setAuditData(mockAudit);
-        // Simulate fetching system stock for this warehouse
-        const stockRes = await invService.getStock({ almacenId: newAuditForm.almacenId });
-        const systemStock = stockRes.data.data || stockRes.data || [];
+            // Re-fetch logic to populate count interface based on what backend generated
+            // For now, in client-side flow if we want to continue immediately:
+            const stockRes = await invService.getStock({ almacenId: newAuditForm.almacenId });
+            const systemStock = stockRes.data.data || stockRes.data || [];
 
-        // Initialize blind count (quantity 0)
-        setCountItems(systemStock.map((item: any) => ({
-            ...item,
-            systemQty: item.stockActual, // Hidden in blind view
-            countedQty: 0, // User input
-            notes: ''
-        })));
+            setAuditData({
+                id: res.data.idConteo,
+                ...newAuditForm,
+                items: systemStock
+            });
 
-        setShowCreateModal(false);
-        setActiveStep('COUNT');
-        alertSuccess('Auditoría Iniciada', 'El stock ha sido congelado. Proceda al conteo ciego.');
+            setCountItems(systemStock.map((item: any) => ({
+                ...item,
+                systemQty: item.stockActual,
+                countedQty: 0,
+                notes: ''
+            })));
+
+            setShowCreateModal(false);
+            setActiveStep('COUNT');
+            alertSuccess('Auditoría Iniciada', 'Stock congelado correctamente.');
+        } catch (e) {
+            alertError('Error al iniciar auditoría');
+        }
     };
 
     // --- STEP 2: BLIND COUNT ---
@@ -99,14 +106,17 @@ export const AuditoriaView = () => {
         if (confirm.isConfirmed) {
             setLoading(true);
             try {
-                // Here we would send { auditId, items: [...] } to backend
-                // await invService.reconcileAudit(auditData.id, countItems);
-                setTimeout(() => {
-                    alertSuccess('Inventario Ajustado', 'Las existencias ahora coinciden con el físico.');
-                    setActiveStep('LIST');
-                    fetchConteos();
-                    setAuditData(null);
-                }, 1500);
+                const user = JSON.parse(localStorage.getItem('inv_user') || '{}');
+                await invService.conciliarAuditoria({
+                    idConteo: auditData.id,
+                    items: countItems,
+                    idUsuario: user.idUsuario
+                });
+
+                alertSuccess('Inventario Ajustado', 'Las existencias ahora coinciden con el físico.');
+                setActiveStep('LIST');
+                fetchConteos();
+                setAuditData(null);
             } catch (e) {
                 alertError('Error al conciliar');
             } finally {

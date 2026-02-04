@@ -18,34 +18,33 @@ export const CierreMesView = () => {
 
     const fetchCierres = async () => {
         setLoading(true);
-        // Mock API call for closures history
-        // const res = await invService.getCierres();
-        // setCierres(res.data);
-        setTimeout(() => {
-            setCierres([
-                { id: 1, mes: 'Enero 2026', fecha: '2026-01-31', totalItems: 1450, valorTotal: 45200, estado: 'CERRADO' }
-            ]);
+        try {
+            const res = await invService.getCierresMensuales();
+            setCierres(res.data || []);
+        } catch (e) {
+            console.error(e);
+        } finally {
             setLoading(false);
-        }, 500);
+        }
     };
 
     const handleGenerarCierre = async () => {
         setLoadingStock(true);
         try {
-            // 1. Fetch current Snapshot
-            const res = await invService.getStock();
-            const stock = res.data.data || res.data || [];
-            setCurrentStock(stock);
-
-            // 2. Calculation Logic
-            const totalValor = stock.reduce((acc: number, item: any) => acc + ((item.stockActual || 0) * (item.costoPromedio || 0)), 0);
+            const user = JSON.parse(localStorage.getItem('inv_user') || '{}');
+            await invService.generarCierreMensual({
+                mes: `Cierre ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`,
+                idUsuario: user.idUsuario
+            });
 
             alertSuccess(
-                'Pre-Cierre Generado',
-                `Valor Total Inventario: $${totalValor.toFixed(2)}. Listo para exportar o congelar.`
+                'Cierre Mensual Generado Correctamente',
+                'El estado del inventario ha sido congelado y guardado en el histórico.'
             );
+            fetchCierres();
+            setCurrentStock([]);
         } catch (e) {
-            alertError('Error obteniendo datos');
+            alertError('Error generando cierre');
         } finally {
             setLoadingStock(false);
         }

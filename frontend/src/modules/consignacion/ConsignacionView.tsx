@@ -129,10 +129,13 @@ export const ConsignacionView = () => {
         if (!confirm(`¿Confirmar cierre de periodo para ${debtItem.proveedor.nombre} por $${debtItem.total.toFixed(2)}?`)) return;
 
         setProcessing(true);
+        const user = JSON.parse(localStorage.getItem('inv_user') || '{}');
+        if (!user.idUsuario) return alertError('Sesión inválida');
+
         try {
             await invService.processLiquidation({
                 proveedorId: debtItem.proveedor.idProveedor,
-                idUsuario: 1, // Currently hardcoded or get from auth
+                idUsuario: user.idUsuario,
                 fechaInicio: startDate,
                 fechaFin: endDate,
                 notas: `Corte ${startDate} a ${endDate}`

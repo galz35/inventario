@@ -1,4 +1,5 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, Request } from '@nestjs/common';
+import { Roles } from '../../auth/roles.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import * as activosRepo from './activos.repo';
 
@@ -16,5 +17,24 @@ export class ActivosController {
     if (!serial) return null;
     const resultados = await activosRepo.buscarActivoPorSerie(serial);
     return resultados[0] || null; // Retorna el primer match o null
+  }
+
+  @Post('asignar')
+  @Roles('ADMIN', 'SUPERVISOR', 'BODEGA')
+  async asignar(@Body() body: { idActivo: number, idTecnico?: number, idAlmacen?: number, notas?: string }, @Request() req: any) {
+    if (!body.idActivo) throw new Error("ID Activo requerido");
+    return await activosRepo.asignarActivo({
+      ...body,
+      idUsuarioAsigna: req.user.idUsuario
+    });
+  }
+
+  @Post()
+  @Roles('ADMIN', 'SUPERVISOR', 'BODEGA')
+  async crear(@Body() body: any, @Request() req: any) {
+    return await activosRepo.crearActivo({
+      ...body,
+      idUsuarioRegistra: req.user.idUsuario
+    });
   }
 }
