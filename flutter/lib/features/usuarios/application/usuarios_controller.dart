@@ -45,13 +45,18 @@ class UsuariosController extends StateNotifier<UsuariosState> {
     }
   }
 
-  Future<void> crear({required String nombre, required String email, required String rol}) async {
-    await _repository.crear(nombre: nombre, email: email, rol: rol);
+  Future<void> crear({
+    required String username,
+    required String nombre,
+    required String rol,
+  }) async {
+    await _repository.crear(username: username, nombre: nombre, rol: rol);
     await cargar();
   }
 
-  Future<void> actualizarEstado({required int id, required String estado}) async {
-    await _repository.actualizarEstado(id: id, estado: estado);
+  Future<void> alternarEstado({required int id, required bool actualActivo}) async {
+    final nuevoEstado = actualActivo ? 'Inactivo' : 'Activo';
+    await _repository.actualizarEstado(id: id, estado: nuevoEstado);
     await cargar();
   }
 }

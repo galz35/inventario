@@ -64,43 +64,53 @@ class _ReportesPageState extends ConsumerState<ReportesPage> {
             children: [
               SizedBox(
                 width: 260,
-                child: DropdownButtonFormField<String>(
-                  value: _tipo,
-                  items: _tipos
-                      .map((tipo) => DropdownMenuItem<String>(value: tipo, child: Text(tipo)))
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _tipo = value);
-                  },
+                child: InputDecorator(
                   decoration: const InputDecoration(labelText: 'Tipo de reporte'),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _tipo,
+                      isDense: true,
+                      items: _tipos
+                          .map((tipo) => DropdownMenuItem(value: tipo, child: Text(tipo)))
+                          .toList(growable: false),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _tipo = value);
+                      },
+                    ),
+                  ),
                 ),
               ),
               SizedBox(
                 width: 220,
-                child: DropdownButtonFormField<String>(
-                  value: _periodo,
-                  items: _periodos
-                      .map((periodo) => DropdownMenuItem<String>(value: periodo, child: Text(periodo)))
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _periodo = value);
-                  },
+                child: InputDecorator(
                   decoration: const InputDecoration(labelText: 'Periodo'),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _periodo,
+                      isDense: true,
+                      items: _periodos
+                          .map((periodo) => DropdownMenuItem(value: periodo, child: Text(periodo)))
+                          .toList(growable: false),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _periodo = value);
+                      },
+                    ),
+                  ),
                 ),
               ),
               FilledButton.icon(
                 onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
                   await ref.read(reportesControllerProvider.notifier).generar(
                         tipo: _tipo,
                         periodo: _periodo,
                       );
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Reporte generado localmente y en cola sync.')),
-                    );
-                  }
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Reporte generado localmente y en cola sync.')),
+                  );
                 },
                 icon: const Icon(Icons.post_add),
                 label: const Text('Generar'),

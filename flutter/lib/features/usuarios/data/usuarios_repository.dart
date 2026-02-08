@@ -4,8 +4,8 @@ abstract class UsuariosRepository {
   Future<List<UsuarioItem>> listar({bool forceRemote = false});
 
   Future<int> crear({
+    required String username,
     required String nombre,
-    required String email,
     required String rol,
   });
 

@@ -6,6 +6,7 @@ import '../../../app/theme/app_theme.dart';
 import '../../../shared/layout/inv_shell.dart';
 import '../../../shared/models/app_nav_items.dart';
 import '../application/transferencias_controller.dart';
+import '../domain/transferencia_item.dart';
 
 class TransferenciasPage extends ConsumerStatefulWidget {
   const TransferenciasPage({super.key});
@@ -15,67 +16,6 @@ class TransferenciasPage extends ConsumerStatefulWidget {
 }
 
 class _TransferenciasPageState extends ConsumerState<TransferenciasPage> {
-  final _origenController = TextEditingController(text: 'Almacén Central');
-  final _destinoController = TextEditingController();
-  final _itemsController = TextEditingController(text: '1');
-
-  Future<void> _showAgregarLineaDialog(BuildContext context, int transferenciaId) async {
-    final codigoController = TextEditingController();
-    final descripcionController = TextEditingController();
-    final cantidadController = TextEditingController(text: '1');
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Agregar línea'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: codigoController,
-                  decoration: const InputDecoration(labelText: 'Código'),
-                ),
-                TextField(
-                  controller: descripcionController,
-                  decoration: const InputDecoration(labelText: 'Descripción'),
-                ),
-                TextField(
-                  controller: cantidadController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Cantidad'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Agregar'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (result == true && mounted) {
-      final cantidad = int.tryParse(cantidadController.text) ?? 1;
-      await ref.read(transferenciasControllerProvider.notifier).agregarLinea(
-            transferenciaId: transferenciaId,
-            codigo: codigoController.text.trim().isEmpty ? 'SIN-COD' : codigoController.text.trim(),
-            descripcion: descripcionController.text.trim().isEmpty
-                ? 'Sin descripción'
-                : descripcionController.text.trim(),
-            cantidad: cantidad,
-          );
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -84,21 +24,25 @@ class _TransferenciasPageState extends ConsumerState<TransferenciasPage> {
     });
   }
 
-  @override
-  void dispose() {
-    _origenController.dispose();
-    _destinoController.dispose();
-    _itemsController.dispose();
-    super.dispose();
+  void _abrirFormularioCreacion(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => const _CrearTransferenciaDialog(),
+    );
+  }
+
+  void _verDetalle(BuildContext context, TransferenciaItem item) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _DetalleTransferenciaSheet(item: item),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(transferenciasControllerProvider);
-    final total = state.items.length;
-    final pendientes = state.items.where((tx) => tx.estado == 'Pendiente').length;
-    final enTransito = state.items.where((tx) => tx.estado == 'En tránsito').length;
-    final recibidas = state.items.where((tx) => tx.estado == 'Recibida').length;
 
     return InvShell(
       title: 'Transferencias',
@@ -108,74 +52,17 @@ class _TransferenciasPageState extends ConsumerState<TransferenciasPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Gestión de transferencias',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
             children: [
-              Chip(label: Text('Total: $total')),
-              Chip(label: Text('Pendientes: $pendientes')),
-              Chip(label: Text('En tránsito: $enTransito')),
-              Chip(label: Text('Recibidas: $recibidas')),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            runSpacing: 10,
-            spacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.end,
-            children: [
-              SizedBox(
-                width: 210,
-                child: TextField(
-                  controller: _origenController,
-                  decoration: const InputDecoration(labelText: 'Origen'),
-                ),
+              const Text(
+                'Movimientos de inventario',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
-              SizedBox(
-                width: 210,
-                child: TextField(
-                  controller: _destinoController,
-                  decoration: const InputDecoration(labelText: 'Destino'),
-                ),
-              ),
-              SizedBox(
-                width: 120,
-                child: TextField(
-                  controller: _itemsController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Items'),
-                ),
-              ),
+              const Spacer(),
               FilledButton.icon(
-                onPressed: () async {
-                  final totalItems = int.tryParse(_itemsController.text) ?? 1;
-                  await ref.read(transferenciasControllerProvider.notifier).crear(
-                        origen: _origenController.text.trim(),
-                        destino: _destinoController.text.trim().isEmpty
-                            ? 'Destino sin definir'
-                            : _destinoController.text.trim(),
-                        totalItems: totalItems,
-                      );
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Transferencia creada localmente y en cola sync.')),
-                      );
-                    }
-                  },
-                icon: const Icon(Icons.add),
-                label: const Text('Crear'),
-              ),
-              OutlinedButton.icon(
-                onPressed: state.loading
-                    ? null
-                    : () => ref.read(transferenciasControllerProvider.notifier).cargar(forceRemote: true),
-                icon: const Icon(Icons.sync),
-                label: const Text('Actualizar'),
+                onPressed: () => _abrirFormularioCreacion(context),
+                icon: const Icon(Icons.add_road),
+                label: const Text('Nueva transferencia'),
               ),
             ],
           ),
@@ -183,113 +70,304 @@ class _TransferenciasPageState extends ConsumerState<TransferenciasPage> {
           if (state.loading) const LinearProgressIndicator(),
           if (state.error != null)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(state.error!, style: const TextStyle(color: Colors.redAccent)),
+              padding: const EdgeInsets.all(8.0),
+              child: Text(state.error!, style: const TextStyle(color: Colors.red)),
             ),
-          const SizedBox(height: 10),
           Expanded(
-            child: Card(
-              child: ListView.separated(
-                itemCount: state.items.length,
-                separatorBuilder: (_, __) => const Divider(color: AppTheme.border),
-                itemBuilder: (context, index) {
-                  final tx = state.items[index];
-                  final lineas = state.lineasPorTransferencia[tx.id] ?? [];
-                  final lineasLoading = state.lineasLoading[tx.id] ?? false;
-                  return ExpansionTile(
-                    leading: const Icon(Icons.local_shipping_outlined),
-                    title: Text('#${tx.id} · ${tx.origen} → ${tx.destino}'),
-                    subtitle: Text('Estado: ${tx.estado}'),
-                    trailing: PopupMenuButton<String>(
-                      initialValue: tx.estado,
-                      onSelected: (value) {
-                        ref
-                            .read(transferenciasControllerProvider.notifier)
-                            .actualizarEstado(id: tx.id, estado: value);
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'Pendiente', child: Text('Pendiente')),
-                        PopupMenuItem(value: 'En tránsito', child: Text('En tránsito')),
-                        PopupMenuItem(value: 'Recibida', child: Text('Recibida')),
-                      ],
-                      child: Chip(label: Text('${tx.totalItems} items · ${tx.estado}')),
-                    ),
-                    onExpansionChanged: (expanded) {
-                      if (expanded && lineas.isEmpty) {
-                        ref
-                            .read(transferenciasControllerProvider.notifier)
-                            .cargarLineas(transferenciaId: tx.id);
-                      }
-                    },
-                    children: [
-                      if (lineasLoading) const LinearProgressIndicator(),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Detalle por ítems',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            TextButton.icon(
-                              onPressed: () => _showAgregarLineaDialog(context, tx.id),
-                              icon: const Icon(Icons.add),
-                              label: const Text('Agregar ítem'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (lineas.isEmpty && !lineasLoading)
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 12),
-                          child: Text('Sin líneas cargadas.'),
-                        ),
-                      for (final linea in lineas)
-                        ListTile(
-                          title: Text('${linea.codigo} · ${linea.descripcion}'),
-                          subtitle: Text('Cantidad: ${linea.cantidad} · Recibido: ${linea.recibido}'),
-                          trailing: Wrap(
-                            spacing: 6,
+            child: GridView.builder(
+              padding: const EdgeInsets.only(top: 10, bottom: 80),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 400,
+                childAspectRatio: 1.5,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+              ),
+              itemCount: state.items.length,
+              itemBuilder: (context, index) {
+                final item = state.items[index];
+                return Card(
+                  child: InkWell(
+                    onTap: () => _verDetalle(context, item),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              IconButton(
-                                tooltip: 'Restar recibido',
-                                onPressed: linea.recibido <= 0
-                                    ? null
-                                    : () {
-                                        ref
-                                            .read(transferenciasControllerProvider.notifier)
-                                            .actualizarRecepcion(
-                                              transferenciaId: tx.id,
-                                              lineaId: linea.id,
-                                              recibido: linea.recibido - 1,
-                                            );
-                                      },
-                                icon: const Icon(Icons.remove_circle_outline),
+                              Chip(
+                                label: Text(item.estado),
+                                backgroundColor: _colorEstado(item.estado),
+                              ),
+                              Text(
+                                '#${item.id}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          Text(
+                            item.origen,
+                            style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                          ),
+                          const Icon(Icons.arrow_downward, size: 16, color: AppTheme.accentBlue),
+                          Text(
+                            item.destino,
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                          ),
+                          const Spacer(),
+                          Row(
+                            children: [
+                              const Icon(Icons.inventory_2_outlined, size: 16),
+                              const SizedBox(width: 4),
+                              Text('${item.totalItems} items'),
+                              const Spacer(),
+                              const Text('Ver detalle', style: TextStyle(color: AppTheme.accentBlue)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _colorEstado(String estado) {
+    switch (estado.toLowerCase()) {
+      case 'pendiente':
+        return Colors.orange.withValues(alpha: 0.2);
+      case 'en tránsito':
+        return Colors.blue.withValues(alpha: 0.2);
+      case 'recibido':
+        return Colors.green.withValues(alpha: 0.2);
+      default:
+        return Colors.grey.withValues(alpha: 0.2);
+    }
+  }
+}
+
+class _CrearTransferenciaDialog extends ConsumerStatefulWidget {
+  const _CrearTransferenciaDialog();
+
+  @override
+  ConsumerState<_CrearTransferenciaDialog> createState() => _CrearTransferenciaDialogState();
+}
+
+class _CrearTransferenciaDialogState extends ConsumerState<_CrearTransferenciaDialog> {
+  final _origenCtrl = TextEditingController();
+  final _destinoCtrl = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Nueva Transferencia'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _origenCtrl,
+            decoration: const InputDecoration(labelText: 'Bodega Origen'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _destinoCtrl,
+            decoration: const InputDecoration(labelText: 'Bodega Destino'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+        FilledButton(
+          onPressed: () async {
+            if (_origenCtrl.text.isEmpty || _destinoCtrl.text.isEmpty) return;
+            await ref.read(transferenciasControllerProvider.notifier).crear(
+                  origen: _origenCtrl.text,
+                  destino: _destinoCtrl.text,
+                  totalItems: 0,
+                );
+            if (context.mounted) Navigator.of(context).pop();
+          },
+          child: const Text('Crear'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetalleTransferenciaSheet extends ConsumerStatefulWidget {
+  const _DetalleTransferenciaSheet({required this.item});
+
+  final TransferenciaItem item;
+
+  @override
+  ConsumerState<_DetalleTransferenciaSheet> createState() => _DetalleTransferenciaSheetState();
+}
+
+class _DetalleTransferenciaSheetState extends ConsumerState<_DetalleTransferenciaSheet> {
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(() {
+      ref.read(transferenciasControllerProvider.notifier).cargarLineas(
+            transferenciaId: widget.item.id,
+          );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(transferenciasControllerProvider);
+    final lineas = state.lineasPorTransferencia[widget.item.id] ?? [];
+    final isLoading = state.lineasLoading[widget.item.id] ?? false;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Transferencia #${widget.item.id}'),
+        actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          ListTile(
+            title: Text('${widget.item.origen} ➔ ${widget.item.destino}'),
+            subtitle: Text('Estado: ${widget.item.estado}'),
+            trailing: PopupMenuButton<String>(
+              onSelected: (val) {
+                ref
+                    .read(transferenciasControllerProvider.notifier)
+                    .actualizarEstado(id: widget.item.id, estado: val);
+                Navigator.of(context).pop();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'En tránsito', child: Text('Iniciar tránsito')),
+                PopupMenuItem(value: 'Recibido', child: Text('Finalizar recepción')),
+              ],
+              child: const Icon(Icons.edit),
+            ),
+          ),
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Text('Items', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => _agregarLinea(context),
+                  icon: const Icon(Icons.add_circle),
+                  tooltip: 'Agregar item',
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: lineas.length,
+                    itemBuilder: (context, index) {
+                      final linea = lineas[index];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          child: Text(linea.cantidad.toString()),
+                        ),
+                        title: Text(linea.descripcion),
+                        subtitle: Text(linea.codigo),
+                        trailing: SizedBox(
+                          width: 120,
+                          child: Row(
+                            children: [
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text('Recibido: ${linea.recibido}'),
+                                  Text('Faltan: ${linea.cantidad - linea.recibido}',
+                                      style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                ],
                               ),
                               IconButton(
-                                tooltip: 'Sumar recibido',
-                                onPressed: linea.recibido >= linea.cantidad
-                                    ? null
-                                    : () {
-                                        ref
-                                            .read(transferenciasControllerProvider.notifier)
-                                            .actualizarRecepcion(
-                                              transferenciaId: tx.id,
-                                              lineaId: linea.id,
-                                              recibido: linea.recibido + 1,
-                                            );
-                                      },
-                                icon: const Icon(Icons.add_circle_outline),
+                                icon: const Icon(Icons.check_circle_outline),
+                                onPressed: () {
+                                  if (linea.recibido < linea.cantidad) {
+                                    ref
+                                        .read(transferenciasControllerProvider.notifier)
+                                        .actualizarRecepcion(
+                                          transferenciaId: widget.item.id,
+                                          lineaId: linea.id,
+                                          recibido: linea.recibido + 1,
+                                        );
+                                  }
+                                },
                               ),
                             ],
                           ),
                         ),
-                    ],
-                  );
-                },
-              ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _agregarLinea(BuildContext context) {
+    final codigoCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final cantCtrl = TextEditingController(text: '1');
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Agregar Item'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: codigoCtrl, decoration: const InputDecoration(labelText: 'Código')),
+            const SizedBox(height: 8),
+            TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Descripción')),
+            const SizedBox(height: 8),
+            TextField(
+              controller: cantCtrl,
+              decoration: const InputDecoration(labelText: 'Cantidad'),
+              keyboardType: TextInputType.number,
             ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () async {
+              final cant = int.tryParse(cantCtrl.text) ?? 1;
+              if (codigoCtrl.text.isEmpty) return;
+
+              await ref.read(transferenciasControllerProvider.notifier).agregarLinea(
+                    transferenciaId: widget.item.id,
+                    codigo: codigoCtrl.text,
+                    descripcion: descCtrl.text,
+                    cantidad: cant,
+                  );
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Agregar'),
           ),
         ],
       ),

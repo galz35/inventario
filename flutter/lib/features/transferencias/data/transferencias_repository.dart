@@ -2,6 +2,7 @@ import '../domain/transferencia_item.dart';
 
 abstract class TransferenciasRepository {
   Future<List<TransferenciaItem>> listar({bool forceRemote = false});
+  Future<List<TransferenciaLineaItem>> listarLineas({required int transferenciaId});
 
   Future<int> crear({
     required String origen,
@@ -14,11 +15,7 @@ abstract class TransferenciasRepository {
     required String estado,
   });
 
-  Future<List<TransferenciaLineaItem>> listarLineas({
-    required int transferenciaId,
-  });
-
-  Future<int> agregarLinea({
+  Future<void> agregarLinea({
     required int transferenciaId,
     required String codigo,
     required String descripcion,

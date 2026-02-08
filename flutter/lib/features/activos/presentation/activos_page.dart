@@ -84,6 +84,7 @@ class _ActivosPageState extends ConsumerState<ActivosPage> {
                   final nombre = _nombreController.text.trim();
                   if (codigo.isEmpty || nombre.isEmpty) return;
 
+                  final messenger = ScaffoldMessenger.of(context);
                   await ref.read(activosControllerProvider.notifier).crear(
                         codigo: codigo,
                         nombre: nombre,
@@ -93,11 +94,10 @@ class _ActivosPageState extends ConsumerState<ActivosPage> {
                   _codigoController.clear();
                   _nombreController.clear();
 
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Activo creado localmente y en cola sync.')),
-                    );
-                  }
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Activo creado localmente y en cola sync.')),
+                  );
                 },
                 icon: const Icon(Icons.add_box_outlined),
                 label: const Text('Crear activo'),

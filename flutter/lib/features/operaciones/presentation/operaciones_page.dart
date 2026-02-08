@@ -84,6 +84,7 @@ class _OperacionesPageState extends ConsumerState<OperacionesPage> {
                   final codigo = _codigoOtController.text.trim();
                   if (codigo.isEmpty) return;
 
+                  final messenger = ScaffoldMessenger.of(context);
                   await ref.read(operacionesControllerProvider.notifier).crear(
                         codigoOt: codigo,
                         tecnico: _tecnicoController.text.trim().isEmpty
@@ -94,11 +95,10 @@ class _OperacionesPageState extends ConsumerState<OperacionesPage> {
 
                   _codigoOtController.clear();
 
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('OT creada localmente y encolada para sync.')),
-                    );
-                  }
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('OT creada localmente y encolada para sync.')),
+                  );
                 },
                 icon: const Icon(Icons.add_task),
                 label: const Text('Crear OT'),

@@ -194,35 +194,6 @@ class _KpiCard extends StatelessWidget {
   final String value;
   final IconData icon;
 
-
-
-  Future<void> _retrySyncErrors() async {
-    setState(() => _syncLoading = true);
-    final moved = await _localDb.resetErrorQueue();
-    final processed = await SyncEngine(_localDb).runPendingQueue();
-    await _loadSyncStats();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Reintento ejecutado: $moved movidos, $processed procesados')),
-      );
-      setState(() => _syncLoading = false);
-    }
-  }
-
-  Future<void> _cleanupDoneQueue() async {
-    setState(() => _syncLoading = true);
-    final removed = await _localDb.clearDoneQueue();
-    await _loadSyncStats();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Limpieza completada: $removed registros done eliminados')),
-      );
-      setState(() => _syncLoading = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Card(

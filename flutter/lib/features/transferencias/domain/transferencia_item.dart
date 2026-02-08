@@ -17,7 +17,6 @@ class TransferenciaItem {
 class TransferenciaLineaItem {
   const TransferenciaLineaItem({
     required this.id,
-    required this.transferenciaId,
     required this.codigo,
     required this.descripcion,
     required this.cantidad,
@@ -25,7 +24,6 @@ class TransferenciaLineaItem {
   });
 
   final int id;
-  final int transferenciaId;
   final String codigo;
   final String descripcion;
   final int cantidad;

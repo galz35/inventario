@@ -15,12 +15,6 @@ class UsuariosPage extends ConsumerStatefulWidget {
 }
 
 class _UsuariosPageState extends ConsumerState<UsuariosPage> {
-  final _nombreController = TextEditingController();
-  final _emailController = TextEditingController();
-  String _rol = 'Técnico';
-
-  static const _roles = <String>['Admin', 'Supervisor', 'Técnico', 'Consulta'];
-
   @override
   void initState() {
     super.initState();
@@ -29,11 +23,11 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
     });
   }
 
-  @override
-  void dispose() {
-    _nombreController.dispose();
-    _emailController.dispose();
-    super.dispose();
+  void _mostrarCrearUsuario(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => const _CrearUsuarioDialog(),
+    );
   }
 
   @override
@@ -41,81 +35,24 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
     final state = ref.watch(usuariosControllerProvider);
 
     return InvShell(
-      title: 'Usuarios',
+      title: 'Administración de Usuarios',
       currentRoute: '/usuarios',
       navItems: kMainNavItems,
       onNavigate: (route) => context.go(route),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Gestión de usuarios y roles',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            runSpacing: 10,
-            spacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.end,
+          Row(
             children: [
-              SizedBox(
-                width: 220,
-                child: TextField(
-                  controller: _nombreController,
-                  decoration: const InputDecoration(labelText: 'Nombre completo'),
-                ),
+              const Text(
+                'Usuarios del sistema',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
-              SizedBox(
-                width: 240,
-                child: TextField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Correo'),
-                ),
-              ),
-              SizedBox(
-                width: 160,
-                child: DropdownButtonFormField<String>(
-                  value: _rol,
-                  items: _roles
-                      .map((rol) => DropdownMenuItem<String>(value: rol, child: Text(rol)))
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _rol = value);
-                  },
-                  decoration: const InputDecoration(labelText: 'Rol'),
-                ),
-              ),
+              const Spacer(),
               FilledButton.icon(
-                onPressed: () async {
-                  final nombre = _nombreController.text.trim();
-                  final email = _emailController.text.trim();
-                  if (nombre.isEmpty || email.isEmpty) return;
-
-                  await ref.read(usuariosControllerProvider.notifier).crear(
-                        nombre: nombre,
-                        email: email,
-                        rol: _rol,
-                      );
-
-                  _nombreController.clear();
-                  _emailController.clear();
-
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Usuario creado localmente y en cola sync.')),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.person_add_alt_1),
-                label: const Text('Crear usuario'),
-              ),
-              OutlinedButton.icon(
-                onPressed: state.loading
-                    ? null
-                    : () => ref.read(usuariosControllerProvider.notifier).cargar(forceRemote: true),
-                icon: const Icon(Icons.sync),
-                label: const Text('Actualizar'),
+                onPressed: () => _mostrarCrearUsuario(context),
+                icon: const Icon(Icons.person_add),
+                label: const Text('Crear Usuario'),
               ),
             ],
           ),
@@ -123,8 +60,8 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
           if (state.loading) const LinearProgressIndicator(),
           if (state.error != null)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(state.error!, style: const TextStyle(color: Colors.redAccent)),
+              padding: const EdgeInsets.all(8.0),
+              child: Text(state.error!, style: const TextStyle(color: Colors.red)),
             ),
           const SizedBox(height: 10),
           Expanded(
@@ -135,21 +72,20 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
                 itemBuilder: (context, index) {
                   final user = state.items[index];
                   return ListTile(
-                    leading: const Icon(Icons.person_outline),
+                    leading: CircleAvatar(
+                      backgroundColor: user.isActivo ? Colors.green : Colors.grey,
+                      child: const Icon(Icons.person, color: Colors.white),
+                    ),
                     title: Text(user.nombre),
-                    subtitle: Text('${user.email} · ${user.rol}'),
-                    trailing: PopupMenuButton<String>(
-                      initialValue: user.estado,
-                      onSelected: (value) {
-                        ref
-                            .read(usuariosControllerProvider.notifier)
-                            .actualizarEstado(id: user.id, estado: value);
+                    subtitle: Text('${user.rol} · @${user.username}'),
+                    trailing: Switch(
+                      value: user.isActivo,
+                      onChanged: (val) {
+                        ref.read(usuariosControllerProvider.notifier).alternarEstado(
+                              id: user.id,
+                              actualActivo: user.isActivo,
+                            );
                       },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'Activo', child: Text('Activo')),
-                        PopupMenuItem(value: 'Suspendido', child: Text('Suspendido')),
-                      ],
-                      child: Chip(label: Text(user.estado)),
                     ),
                   );
                 },
@@ -158,6 +94,67 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CrearUsuarioDialog extends ConsumerStatefulWidget {
+  const _CrearUsuarioDialog();
+
+  @override
+  ConsumerState<_CrearUsuarioDialog> createState() => _CrearUsuarioDialogState();
+}
+
+class _CrearUsuarioDialogState extends ConsumerState<_CrearUsuarioDialog> {
+  final _nombreCtrl = TextEditingController();
+  final _usernameCtrl = TextEditingController();
+  String _rol = 'Tecnico';
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Nuevo Usuario'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(controller: _nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
+          const SizedBox(height: 10),
+          TextField(controller: _usernameCtrl, decoration: const InputDecoration(labelText: 'Username')),
+          const SizedBox(height: 10),
+          InputDecorator(
+            decoration: const InputDecoration(labelText: 'Rol'),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _rol,
+                isDense: true,
+                items: const [
+                  DropdownMenuItem(value: 'Admin', child: Text('Admin')),
+                  DropdownMenuItem(value: 'Tecnico', child: Text('Tecnico')),
+                  DropdownMenuItem(value: 'Inventario', child: Text('Inventario')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() => _rol = val);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(
+          onPressed: () async {
+            if (_nombreCtrl.text.isEmpty || _usernameCtrl.text.isEmpty) return;
+            await ref.read(usuariosControllerProvider.notifier).crear(
+                  nombre: _nombreCtrl.text,
+                  username: _usernameCtrl.text,
+                  rol: _rol,
+                );
+            if (context.mounted) Navigator.pop(context);
+          },
+          child: const Text('Guardar'),
+        ),
+      ],
     );
   }
 }

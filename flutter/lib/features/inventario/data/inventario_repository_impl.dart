@@ -90,7 +90,7 @@ class InventarioRepositoryImpl implements InventarioRepository {
           .toList(growable: false);
     }
 
-    final remote = const <InventarioItem>[
+    const remote = <InventarioItem>[
       InventarioItem(id: 1, codigo: 'MAT-001', descripcion: 'Cable UTP Cat6', stock: 120),
       InventarioItem(id: 2, codigo: 'MAT-002', descripcion: 'Conector RJ45', stock: 540),
       InventarioItem(id: 3, codigo: 'MAT-003', descripcion: 'Switch 24p', stock: 14),

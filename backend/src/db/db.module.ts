@@ -14,6 +14,7 @@ import {
   obtenerPoolSql,
   cerrarPoolSql,
   isPoolConnected,
+  sql,
 } from './sqlserver.provider';
 
 /**
@@ -35,6 +36,10 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
 
   isConnected(): boolean {
     return isPoolConnected();
+  }
+
+  async getPool(): Promise<sql.ConnectionPool> {
+    return obtenerPoolSql(this.configService);
   }
 }
 

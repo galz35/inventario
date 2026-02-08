@@ -7,6 +7,8 @@ import 'package:sqflite/sqflite.dart';
 class LocalDb {
   Database? _db;
 
+  Future<Database> get database => instance();
+
   Future<Database> instance() async {
     if (_db != null) return _db!;
 
@@ -15,7 +17,7 @@ class LocalDb {
 
     _db = await openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: (db, version) async {
         await _createSchema(db);
       },
@@ -43,7 +45,10 @@ class LocalDb {
           await _createSessionCache(db);
         }
         if (oldVersion < 9) {
-          await _createTransferenciasItemsCache(db);
+          await _createTransferenciaLineasCache(db);
+        }
+        if (oldVersion < 10) {
+          await _createAppMetadata(db);
         }
       },
     );
@@ -115,7 +120,28 @@ class LocalDb {
     return '$status · $createdAt';
   }
 
+  Future<DateTime?> getLastSyncTime() async {
+    final db = await instance();
+    final result = await db.query(
+      'app_metadata',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: ['last_sync_time'],
+    );
+    if (result.isNotEmpty && result.first['value'] != null) {
+      return DateTime.tryParse(result.first['value'] as String);
+    }
+    return null;
+  }
 
+  Future<void> setLastSyncTime(DateTime time) async {
+    final db = await instance();
+    await db.insert(
+      'app_metadata',
+      {'key': 'last_sync_time', 'value': time.toIso8601String()},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
 
   Future<int> resetErrorQueue({int limit = 100}) async {
     final db = await instance();
@@ -216,12 +242,13 @@ class LocalDb {
     await _createSyncLog(db);
     await _createInventarioCache(db);
     await _createTransferenciasCache(db);
-    await _createTransferenciasItemsCache(db);
+    await _createTransferenciaLineasCache(db);
     await _createOperacionesCache(db);
     await _createReportesCache(db);
     await _createUsuariosCache(db);
     await _createActivosCache(db);
     await _createSessionCache(db);
+    await _createAppMetadata(db);
   }
 
   Future<void> _createSyncLog(Database db) async {
@@ -261,9 +288,9 @@ class LocalDb {
     ''');
   }
 
-  Future<void> _createTransferenciasItemsCache(Database db) async {
+  Future<void> _createTransferenciaLineasCache(Database db) async {
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS transferencias_items_cache (
+      CREATE TABLE IF NOT EXISTS transferencia_lineas_cache (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         transferencia_id INTEGER NOT NULL,
         codigo TEXT NOT NULL,
@@ -335,6 +362,15 @@ class LocalDb {
         rol TEXT NOT NULL,
         permisos_json TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _createAppMetadata(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS app_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT
       )
     ''');
   }

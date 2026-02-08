@@ -1,0 +1,47 @@
+name: Flutter Build APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # Permite lanzar la compilación manualmente desde la web de GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.5' # Tu versión detectada
+          channel: 'stable'
+
+      - name: Get dependencies (Flutter)
+        run: flutter pub get
+        working-directory: ./flutter
+
+      - name: Build Web (Release)
+        run: flutter build web --release
+        working-directory: ./flutter
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: flutter/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload Web Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: flutter/build/web

@@ -15,8 +15,11 @@ import { MailService } from '../common/services/mail.service';
 import { StorageService } from '../common/services/storage.service';
 import { ExcelService } from '../common/services/excel.service';
 
+import { SyncModule } from './sync/sync.module';
+
 @Module({
   imports: [
+    SyncModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

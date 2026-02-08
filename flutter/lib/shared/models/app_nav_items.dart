@@ -1,13 +1,15 @@
-import 'package:flutter/material.dart';
+class AppNavItem {
+  const AppNavItem({required this.label, required this.route});
+  final String label;
+  final String route;
+}
 
-import '../layout/inv_shell.dart';
-
-const List<NavItem> kMainNavItems = <NavItem>[
-  NavItem(label: 'Inicio', icon: Icons.dashboard_outlined, route: '/dashboard'),
-  NavItem(label: 'Inventario', icon: Icons.inventory_2_outlined, route: '/inventario'),
-  NavItem(label: 'Transferencias', icon: Icons.local_shipping_outlined, route: '/transferencias'),
-  NavItem(label: 'Operaciones', icon: Icons.assignment_outlined, route: '/operaciones'),
-  NavItem(label: 'Reportes', icon: Icons.bar_chart_outlined, route: '/reportes'),
-  NavItem(label: 'Usuarios', icon: Icons.people_outline, route: '/usuarios'),
-  NavItem(label: 'Activos', icon: Icons.handyman_outlined, route: '/activos'),
+const kMainNavItems = <AppNavItem>[
+  AppNavItem(label: 'Dashboard', route: '/dashboard'),
+  AppNavItem(label: 'Inventario', route: '/inventario'),
+  AppNavItem(label: 'Transferencias', route: '/transferencias'),
+  AppNavItem(label: 'Operaciones', route: '/operaciones'),
+  AppNavItem(label: 'Reportes', route: '/reportes'),
+  AppNavItem(label: 'Usuarios', route: '/usuarios'),
+  AppNavItem(label: 'Activos', route: '/activos'),
 ];
