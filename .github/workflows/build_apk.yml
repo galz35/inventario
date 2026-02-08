@@ -36,8 +36,14 @@ jobs:
       - name: Build Web (Release)
         run: flutter build web --release
 
+      - name: Build APK (Release)
+        run: flutter build apk --release
+
       - name: List build output (Debug)
-        run: ls -R flutter/build/app/outputs/flutter-apk/
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -R build/app/outputs/flutter-apk/ || echo "APK directory not found"
+          ls -R build/web/ || echo "Web directory not found"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
