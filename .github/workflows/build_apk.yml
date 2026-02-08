@@ -14,6 +14,10 @@ jobs:
     defaults:
       run:
         working-directory: ./flutter
+    
+    env:
+      FLUTTER_SUPPRESS_ANALYTICS: 1
+      PUB_TELEMETRY_OPT_OUT: 1
 
     steps:
       - uses: actions/checkout@v4
@@ -29,13 +33,19 @@ jobs:
         with:
           flutter-version: '3.38.5' # Tu versión detectada
           channel: 'stable'
+          cache: true
+
+      - name: Disable analytics and clean
+        run: |
+          flutter config --no-analytics
+          flutter clean
 
       - name: Get dependencies (Flutter)
         run: flutter pub get
 
 
       - name: Build APK (Release)
-        run: flutter build apk --release
+        run: flutter build apk --release --no-pub
 
       - name: List build output (Debug)
         run: |
