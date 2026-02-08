@@ -51,23 +51,27 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final user = await _repository.login(username: username, password: password);
 
-      final token = await PushNotificationService.instance.getToken();
-      if (token != null && token.isNotEmpty) {
-        await _repository.registerDeviceToken(
-          userId: user.id,
-          token: token,
-          role: user.rol,
-        );
+      // Push notifications son opcionales (requieren Firebase configurado)
+      try {
+        final token = await PushNotificationService.instance.getToken();
+        if (token != null && token.isNotEmpty) {
+          await _repository.registerDeviceToken(
+            userId: user.id,
+            token: token,
+            role: user.rol,
+          );
+        }
+        await PushNotificationService.instance.subscribeUserTopics(role: user.rol);
+      } catch (_) {
+        // Firebase no configurado, continuar sin notificaciones
       }
-
-      await PushNotificationService.instance.subscribeUserTopics(role: user.rol);
 
       state = state.copyWith(user: user, loading: false);
       return true;
-    } catch (_) {
+    } catch (e) {
       state = state.copyWith(
         loading: false,
-        error: 'No se pudo iniciar sesión.',
+        error: 'No se pudo iniciar sesión. Verifica tu conexión.',
       );
       return false;
     }
