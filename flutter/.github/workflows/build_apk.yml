@@ -10,6 +10,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./flutter
 
     steps:
       - uses: actions/checkout@v4
@@ -28,11 +32,9 @@ jobs:
 
       - name: Get dependencies (Flutter)
         run: flutter pub get
-        working-directory: ./flutter
 
       - name: Build Web (Release)
         run: flutter build web --release
-        working-directory: ./flutter
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
